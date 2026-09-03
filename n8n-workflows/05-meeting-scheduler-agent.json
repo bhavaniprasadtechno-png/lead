@@ -1,0 +1,180 @@
+{
+  "name": "Agent 5 — Meeting Scheduler",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "notes": "Chained from Agent 4 when intent = interested. Can also be exposed as its own webhook.",
+      "parameters": {}
+    },
+    {
+      "id": "signGetPrompt",
+      "name": "Sign: Get Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { leadId: $json.leadId, orgId: $json.orgId, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getPrompt",
+      "name": "GET Agent Prompt (scheduler)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, -100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/scheduler?orgId={{$json.orgId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "signGetLead",
+      "name": "Sign: Get Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getLead",
+      "name": "GET Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "callClaude",
+      "name": "Call Claude (Draft Booking Msg)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "={{$('GET Agent Prompt (scheduler)').first().json.agent.model}}" },
+            { "name": "max_tokens", "value": "256" },
+            { "name": "system", "value": "={{$('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}}" },
+            { "name": "messages", "value": "={{[{role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}]}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parseMsg",
+      "name": "Parse Booking Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "jsCode": "const text = $input.first().json.content[0].text;\nconst parsed = JSON.parse(text);\nconst bookingLink = $env.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
+      }
+    },
+    {
+      "id": "sendEmail",
+      "name": "Postmark: Send Booking Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postmarkapp.com/email",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "postmarkApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "To", "value": "={{$('GET Lead').first().json.lead.email}}" },
+            { "name": "Subject", "value": "={{$json.subject}}" },
+            { "name": "TextBody", "value": "={{$json.body}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "signReport",
+      "name": "Sign: Report Meeting Offer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Booking Message').first().json;\nconst body = { event: 'meeting.booked', orgId: p.orgId, leadId: p.leadId, agentType: 'scheduler', input: {}, output: { bookingLink: p.bookingLink, subject: p.subject }, requiresHumanReview: false };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "postInbound",
+      "name": "POST /webhooks/inbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0],
+      "notes": "In production, prefer a Cal.com/Google Calendar 'booking confirmed' webhook to fire this instead of firing immediately after the invite email — this models the simpler 'propose a link' flow from the spec.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APP_BASE_URL}}/api/webhooks/inbound",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.rawBody}}"
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": { "main": [[{ "node": "Sign: Get Prompt", "type": "main", "index": 0 }]] },
+    "Sign: Get Prompt": {
+      "main": [[
+        { "node": "GET Agent Prompt (scheduler)", "type": "main", "index": 0 },
+        { "node": "Sign: Get Lead", "type": "main", "index": 0 }
+      ]]
+    },
+    "Sign: Get Lead": { "main": [[{ "node": "GET Lead", "type": "main", "index": 0 }]] },
+    "GET Agent Prompt (scheduler)": { "main": [[{ "node": "Call Claude (Draft Booking Msg)", "type": "main", "index": 0 }]] },
+    "GET Lead": { "main": [[{ "node": "Call Claude (Draft Booking Msg)", "type": "main", "index": 0 }]] },
+    "Call Claude (Draft Booking Msg)": { "main": [[{ "node": "Parse Booking Message", "type": "main", "index": 0 }]] },
+    "Parse Booking Message": { "main": [[{ "node": "Postmark: Send Booking Email", "type": "main", "index": 0 }]] },
+    "Postmark: Send Booking Email": { "main": [[{ "node": "Sign: Report Meeting Offer", "type": "main", "index": 0 }]] },
+    "Sign: Report Meeting Offer": { "main": [[{ "node": "POST /webhooks/inbound", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

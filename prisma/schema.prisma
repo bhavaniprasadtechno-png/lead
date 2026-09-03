@@ -1,0 +1,377 @@
+// AI-Powered Lead Generation & Management Platform
+// Database schema (system of record). n8n / external agents read & write
+// exclusively through the REST API layer in src/app/api — never directly.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Organizations & Users
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  plan      String   @default("trial")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users            User[]
+  leads            Lead[]
+  campaigns        Campaign[]
+  emailTemplates   EmailTemplate[]
+  agents           Agent[]
+  integrations     Integration[]
+
+  @@map("organizations")
+}
+
+enum UserRole {
+  owner
+  admin
+  rep
+}
+
+model User {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole @default(rep)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ownedLeads   Lead[]        @relation("LeadOwner")
+
+  @@index([orgId])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+
+enum LeadStatus {
+  new
+  enriching
+  scoring
+  qualified
+  disqualified
+  contacted
+  engaged
+  meeting_booked
+  won
+  lost
+}
+
+enum LeadSource {
+  web_form
+  landing_page
+  csv_import
+  linkedin
+  referral
+  manual
+  other
+}
+
+model Lead {
+  id           String     @id @default(uuid())
+  orgId        String     @map("org_id")
+  source       LeadSource @default(manual)
+  firstName    String     @map("first_name")
+  lastName     String?    @map("last_name")
+  email        String
+  phone        String?
+  company      String?
+  jobTitle     String?    @map("job_title")
+  linkedinUrl  String?    @map("linkedin_url")
+  website      String?
+  status       LeadStatus @default(new)
+  score        Int?
+  scoreReason  String?    @map("score_reason")
+  ownerId      String?    @map("owner_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner        User?           @relation("LeadOwner", fields: [ownerId], references: [id])
+  enrichment   LeadEnrichment?
+  activities   Activity[]
+  emailLogs    EmailLog[]
+  agentRuns    AgentRun[]
+  sequenceEnrollments SequenceEnrollment[]
+
+  @@index([orgId, status])
+  @@index([orgId, email])
+  @@map("leads")
+}
+
+model LeadEnrichment {
+  id                String   @id @default(uuid())
+  leadId            String   @unique @map("lead_id")
+  companySize       String?  @map("company_size")
+  industry          String?
+  revenueRange      String?  @map("revenue_range")
+  technologiesUsed  Json?    @map("technologies_used")
+  socialProfiles    Json?    @map("social_profiles")
+  rawPayload        Json?    @map("raw_payload")
+  enrichedAt        DateTime @default(now()) @map("enriched_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_enrichment")
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns & Sequences
+// ---------------------------------------------------------------------------
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  archived
+}
+
+model Campaign {
+  id        String         @id @default(uuid())
+  orgId     String         @map("org_id")
+  name      String
+  goal      String?
+  status    CampaignStatus @default(draft)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sequences    Sequence[]
+
+  @@index([orgId])
+  @@map("campaigns")
+}
+
+enum SequenceTrigger {
+  lead_qualified
+  manual
+  form_submission
+}
+
+model Sequence {
+  id          String          @id @default(uuid())
+  campaignId  String          @map("campaign_id")
+  name        String
+  triggerType SequenceTrigger @default(lead_qualified) @map("trigger_type")
+  // steps: [{ order, delayHours, templateId, condition }]
+  steps       Json
+
+  campaign    Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  enrollments SequenceEnrollment[]
+
+  @@map("sequences")
+}
+
+// Tracks a lead's progress through a sequence — what Agent 6 (drip
+// orchestrator) polls via GET /api/sequences/due.
+model SequenceEnrollment {
+  id              String    @id @default(uuid())
+  sequenceId      String    @map("sequence_id")
+  leadId          String    @map("lead_id")
+  currentStep     Int       @default(0) @map("current_step")
+  nextStepDueAt   DateTime? @map("next_step_due_at")
+  completedAt     DateTime? @map("completed_at")
+  stoppedReason   String?   @map("stopped_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([nextStepDueAt])
+  @@map("sequence_enrollments")
+}
+
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  name        String
+  subject     String
+  bodyPrompt  String   @map("body_prompt")
+  tone        String   @default("professional")
+  variables   Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("email_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Activity / Timeline — source of truth for what agents (or humans) did
+// ---------------------------------------------------------------------------
+
+enum ActivityType {
+  email_sent
+  email_opened
+  email_clicked
+  email_replied
+  call_logged
+  note
+  status_change
+  meeting_booked
+  enrichment_completed
+  score_updated
+}
+
+enum ActivityActor {
+  agent
+  human
+  system
+}
+
+model Activity {
+  id        String        @id @default(uuid())
+  leadId    String        @map("lead_id")
+  type      ActivityType
+  actor     ActivityActor @default(system)
+  agentName String?       @map("agent_name")
+  payload   Json?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("activities")
+}
+
+model EmailLog {
+  id             String    @id @default(uuid())
+  leadId         String    @map("lead_id")
+  sequenceStepId String?   @map("sequence_step_id")
+  subject        String
+  body           String
+  sentAt         DateTime  @default(now()) @map("sent_at")
+  openedAt       DateTime? @map("opened_at")
+  clickedAt      DateTime? @map("clicked_at")
+  repliedAt      DateTime? @map("replied_at")
+  messageId      String?   @map("message_id")
+  threadId       String?   @map("thread_id")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([threadId])
+  @@map("email_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Agent configuration — drives what n8n workflows read at runtime
+// ---------------------------------------------------------------------------
+
+enum AgentType {
+  enricher
+  scorer
+  writer
+  classifier
+  scheduler
+  orchestrator
+  housekeeping
+}
+
+model Agent {
+  id           String    @id @default(uuid())
+  orgId        String    @map("org_id")
+  name         String
+  type         AgentType
+  systemPrompt String    @map("system_prompt")
+  model        String    @default("claude-sonnet-5")
+  isActive     Boolean   @default(true) @map("is_active")
+  config       Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runs         AgentRun[]
+
+  @@index([orgId, type])
+  @@map("agents")
+}
+
+enum AgentRunStatus {
+  success
+  failure
+  needs_review
+}
+
+model AgentRun {
+  id          String         @id @default(uuid())
+  agentId     String         @map("agent_id")
+  leadId      String?        @map("lead_id")
+  input       Json
+  output      Json?
+  status      AgentRunStatus @default(success)
+  latencyMs   Int?           @map("latency_ms")
+  reviewedAt  DateTime?      @map("reviewed_at")
+  reviewedBy  String?        @map("reviewed_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  lead  Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([agentId])
+  @@index([status])
+  @@map("agent_runs")
+}
+
+// ---------------------------------------------------------------------------
+// Integrations & inbound webhook audit log
+// ---------------------------------------------------------------------------
+
+enum IntegrationProvider {
+  n8n
+  apollo
+  clearbit
+  hunter
+  postmark
+  sendgrid
+  ses
+  gmail
+  microsoft_graph
+  cal_com
+  google_calendar
+  claude
+}
+
+enum IntegrationStatus {
+  connected
+  disconnected
+  error
+}
+
+model Integration {
+  id            String              @id @default(uuid())
+  orgId         String              @map("org_id")
+  provider      IntegrationProvider
+  credentialRef String?             @map("credentials_ref")
+  status        IntegrationStatus   @default(disconnected)
+  connectedAt   DateTime?           @map("connected_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, provider])
+  @@map("integrations")
+}
+
+model WebhookInboundLog {
+  id          String   @id @default(uuid())
+  source      String
+  dedupeKey   String   @unique @map("dedupe_key")
+  payload     Json
+  processed   Boolean  @default(false)
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  @@map("webhooks_inbound_log")
+}

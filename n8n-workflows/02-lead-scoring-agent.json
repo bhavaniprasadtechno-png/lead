@@ -1,0 +1,202 @@
+{
+  "name": "Agent 2 — Lead Scoring & Qualification",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Webhook: lead.enriched",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": { "path": "webhook/lead.enriched", "httpMethod": "POST", "responseMode": "onReceived", "options": {} }
+    },
+    {
+      "id": "verify",
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { leadId: body.payload.leadId, orgId: body.payload.orgId } }];"
+      }
+    },
+    {
+      "id": "signGetPrompt",
+      "name": "Sign: Get Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -120],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getPrompt",
+      "name": "GET Agent Prompt (scorer)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -120],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/scorer?orgId={{$json.orgId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "signGetLead",
+      "name": "Sign: Get Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 120],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getLead",
+      "name": "GET Lead (+ enrichment)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 120],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "callClaude",
+      "name": "Call Claude (Score Lead)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "={{$('GET Agent Prompt (scorer)').first().json.agent.model}}" },
+            { "name": "max_tokens", "value": "512" },
+            { "name": "system", "value": "={{$('GET Agent Prompt (scorer)').first().json.agent.systemPrompt}}" },
+            { "name": "messages", "value": "={{[{role:'user', content: JSON.stringify($('GET Lead (+ enrichment)').first().json.lead)}]}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parseScore",
+      "name": "Parse Score JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "parameters": {
+        "jsCode": "const text = $input.first().json.content[0].text;\nconst parsed = JSON.parse(text);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (scorer)').first().json.agent.id, ...parsed } }];"
+      }
+    },
+    {
+      "id": "signPatchLead",
+      "name": "Sign: Patch Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -60],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { score: $json.score, scoreReason: $json.reason };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, body, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "patchLead",
+      "name": "PATCH /leads/:id (score)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, -60],
+      "notes": "The app auto-transitions the lead to 'qualified' and fires lead.qualified when score >= threshold — no extra branching needed here.",
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.rawBody}}"
+      }
+    },
+    {
+      "id": "signRunLog",
+      "name": "Sign: Log Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -60],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { leadId: $json.leadId, input: { leadId: $json.leadId }, output: { score: $json.score, qualified: $json.qualified, reason: $json.reason }, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "logRun",
+      "name": "POST /agents/:id/runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, -60],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.rawBody}}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: lead.enriched": { "main": [[{ "node": "Verify Signature", "type": "main", "index": 0 }]] },
+    "Verify Signature": {
+      "main": [[
+        { "node": "Sign: Get Prompt", "type": "main", "index": 0 },
+        { "node": "Sign: Get Lead", "type": "main", "index": 0 }
+      ]]
+    },
+    "Sign: Get Prompt": { "main": [[{ "node": "GET Agent Prompt (scorer)", "type": "main", "index": 0 }]] },
+    "Sign: Get Lead": { "main": [[{ "node": "GET Lead (+ enrichment)", "type": "main", "index": 0 }]] },
+    "GET Agent Prompt (scorer)": { "main": [[{ "node": "Call Claude (Score Lead)", "type": "main", "index": 0 }]] },
+    "GET Lead (+ enrichment)": { "main": [[{ "node": "Call Claude (Score Lead)", "type": "main", "index": 0 }]] },
+    "Call Claude (Score Lead)": { "main": [[{ "node": "Parse Score JSON", "type": "main", "index": 0 }]] },
+    "Parse Score JSON": { "main": [[{ "node": "Sign: Patch Lead", "type": "main", "index": 0 }]] },
+    "Sign: Patch Lead": { "main": [[{ "node": "PATCH /leads/:id (score)", "type": "main", "index": 0 }]] },
+    "PATCH /leads/:id (score)": { "main": [[{ "node": "Sign: Log Run", "type": "main", "index": 0 }]] },
+    "Sign: Log Run": { "main": [[{ "node": "POST /agents/:id/runs", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
