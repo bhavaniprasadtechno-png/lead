@@ -57,12 +57,30 @@ For **GET** requests (no body), sign over an empty string: `rawBody = ""`.
 
 ## App → n8n events (this app calls these webhook URLs)
 
-| Event | Workflow |
-|---|---|
-| `lead.created` | 01-lead-enrichment-agent |
-| `lead.enriched` | 02-lead-scoring-agent |
-| `lead.qualified` | 03-email-personalization-agent |
-| `email.replied` (also used for approval decisions) | 04-reply-intent-classifier-agent |
+The app builds each URL as `${N8N_WEBHOOK_BASE_URL}/webhook/<event>`
+(`src/lib/n8n.ts`). That must match the webhook trigger node's **Path**
+field *exactly* — set it to just the event name below, with no extra
+prefix (e.g. `lead.enriched`, not `webhook/lead.enriched`).
+
+| Event | Workflow | Webhook node "Path" |
+|---|---|---|
+| `lead.created` | 01-lead-enrichment-agent | `lead.created` |
+| `lead.enriched` | 02-lead-scoring-agent | `lead.enriched` |
+| `lead.qualified` | 03-email-personalization-agent | `lead.qualified` |
+
+`email.replied` is fired by the app when a human decides on an item in the
+**Approvals** queue (`POST /api/approvals/:id`), but Agent 4 in this repo
+is Gmail-trigger-based, not webhook-based — there's no workflow here that
+receives it yet. Add a small webhook-triggered workflow (path
+`email.replied`) if you want n8n to act on approval decisions instead of
+just leaving the app's own DB update as the record.
+
+n8n gives every webhook node **two URLs**: a test one
+(`.../webhook-test/<path>`, only fires once, per click of **"Listen for
+test event"** in the editor) and a production one (`.../webhook/<path>`,
+live once the workflow's **Active** toggle, top-right of the editor, is
+on). The app always calls the production URL — a workflow must be
+Active for the app's automatic calls to reach it.
 
 ## n8n → app endpoints (these workflows call the app's REST API)
 

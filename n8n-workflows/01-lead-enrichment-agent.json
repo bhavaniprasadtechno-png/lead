@@ -8,7 +8,7 @@
       "typeVersion": 2,
       "position": [0, 0],
       "parameters": {
-        "path": "webhook/lead.created",
+        "path": "lead.created",
         "httpMethod": "POST",
         "responseMode": "onReceived",
         "options": {}

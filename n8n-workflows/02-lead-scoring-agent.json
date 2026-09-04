@@ -7,7 +7,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 0],
-      "parameters": { "path": "webhook/lead.enriched", "httpMethod": "POST", "responseMode": "onReceived", "options": {} }
+      "parameters": { "path": "lead.enriched", "httpMethod": "POST", "responseMode": "onReceived", "options": {} }
     },
     {
       "id": "verify",
