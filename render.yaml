@@ -14,7 +14,13 @@ services:
     name: leadpilot-web
     runtime: node
     buildCommand: npm install && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    # `db push` (not `migrate deploy`) on purpose: Supabase's other
+    # schemas (auth, storage, extensions, ...) make migrate deploy's
+    # "is this schema empty?" check fail with P3005 even though `public`
+    # — the only schema this app uses — is genuinely fresh. db push just
+    # diffs schema.prisma against the live public schema and applies the
+    # difference; it's idempotent, so safe to run on every redeploy.
+    startCommand: npx prisma db push --accept-data-loss --skip-generate && npm start
     # Free tier: no card required. Tradeoff: spins down after 15 min idle,
     # so the next request (including an n8n webhook call) pays a ~30-60s
     # cold-start instead of failing outright. Switch to "starter" later if
