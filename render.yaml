@@ -13,9 +13,10 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    # "free" works too, but the service spins down on idle, which can make
-    # it miss/timeout n8n's webhook calls after inactivity
-    plan: starter
+    # Free tier: no cost, but spins down after 15 min idle — the next
+    # request (including an n8n webhook call) pays a ~30-60s cold-start.
+    # Switch to "starter" later if that latency becomes a problem.
+    plan: free
     region: oregon
     healthCheckPath: /login
     autoDeploy: true

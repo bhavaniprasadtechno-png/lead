@@ -161,9 +161,11 @@ behavior matches local `docker compose` exactly):
    It's the missing piece for n8n Cloud, which can't reach a local or
    sandboxed dev instance.
 
-The `starter` plan is set by default; switch to `free` in the blueprint
-or dashboard if cost matters more than avoiding idle spin-down (a
-sleeping free instance can miss or time out an n8n webhook call).
+The `free` plan is set by default — no card/payment needed to deploy. Its
+tradeoff: the service spins down after 15 min idle, so the next request
+(an n8n webhook call included) pays a ~30-60s cold-start instead of
+failing outright. Switch to `starter` later in the blueprint or dashboard
+if that latency becomes a problem.
 
 ## Database schema
 
