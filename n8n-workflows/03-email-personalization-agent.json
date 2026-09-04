@@ -16,7 +16,7 @@
       "typeVersion": 2,
       "position": [220, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { leadId: body.payload.leadId, orgId: body.payload.orgId, templateId: body.payload.templateId, enrollmentId: body.payload.enrollmentId || null } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { leadId: body.payload.leadId, orgId: body.payload.orgId, templateId: body.payload.templateId, enrollmentId: body.payload.enrollmentId || null } }];"
       }
     },
     {
@@ -30,7 +30,7 @@
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
-            { "leftValue": "={{$env.SEND_ENABLED}}", "rightValue": "true", "operator": { "type": "string", "operation": "equals" } }
+            { "leftValue": "={{$vars.SEND_ENABLED}}", "rightValue": "true", "operator": { "type": "string", "operation": "equals" } }
           ],
           "combinator": "and"
         }
@@ -43,7 +43,7 @@
       "typeVersion": 2,
       "position": [660, -160],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
       }
     },
     {
@@ -54,7 +54,7 @@
       "position": [880, -160],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/writer?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/writer?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -71,7 +71,7 @@
       "typeVersion": 2,
       "position": [660, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
       }
     },
     {
@@ -82,7 +82,7 @@
       "position": [880, 0],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -99,7 +99,7 @@
       "typeVersion": 2,
       "position": [660, 160],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
       }
     },
     {
@@ -110,7 +110,7 @@
       "position": [880, 160],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/email-templates/{{$json.templateId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/email-templates/{{$json.templateId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -190,7 +190,7 @@
       "typeVersion": 2,
       "position": [1760, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -201,7 +201,7 @@
       "position": [1980, 0],
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APP_BASE_URL}}/api/webhooks/inbound",
+        "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

@@ -22,17 +22,36 @@ n8n import:workflow --input=n8n-workflows/06-sequence-orchestrator.json
 n8n import:workflow --input=n8n-workflows/07-housekeeping-agent.json
 ```
 
-## Required n8n environment / credentials
+## Required n8n Variables
 
-| Name | Used for |
+Every Code/HTTP node below reads `$vars.<NAME>` — n8n's own **Variables**
+feature, *not* `$env.<NAME>` (real OS environment variables). This
+matters because n8n Cloud gives you no way to set real process env vars;
+only self-hosted n8n (where you control the container) can use `$env`.
+`$vars` works identically on both, so that's what every workflow uses.
+
+Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
+→ Variables**, depending on your n8n version) → **Add Variable**.
+
+| Variable | Value | Required by |
+|---|---|---|
+| `N8N_WEBHOOK_SECRET` | A secret **you generate** — e.g. `openssl rand -base64 32`. This is not provided by n8n; it's a shared password you invent and set in **both** n8n and the app's `N8N_WEBHOOK_SECRET` env var, byte-for-byte identical. | every workflow (signing/verifying every request) |
+| `APP_BASE_URL` | Your deployed app's public URL, e.g. `https://leadpilot-web.onrender.com` (no trailing slash) | every workflow that calls the app's API |
+| `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
+| `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
+| `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
+
+Separately, in n8n's **credential store** (Settings → Credentials, not
+Variables — these are actual API keys, kept out of both `$vars` and the
+workflow JSON):
+
+| Credential | Used for |
 |---|---|
-| `APP_BASE_URL` | Base URL of the web app, e.g. `https://app.yourdomain.com` |
-| `N8N_WEBHOOK_SECRET` | Shared HMAC secret — must match the app's `N8N_WEBHOOK_SECRET` env var |
-| Claude API credential | Anthropic API key, used by the "Call Claude" HTTP Request nodes |
-| Apollo/Clearbit API credential | Used by Agent 1 (enrichment) |
-| Postmark/SES credential | Used by Agent 3 (sending) |
-| Gmail/Microsoft Graph credential | Used by Agent 4 (reply capture) |
-| Cal.com / Google Calendar credential | Used by Agent 5 (scheduling) |
+| Claude API (Anthropic) | Every "Call Claude" HTTP Request node |
+| Apollo/Clearbit API | Agent 1 (enrichment) |
+| Postmark/SES | Agent 3 (sending) |
+| Gmail/Microsoft Graph | Agent 4 (reply capture) |
+| Cal.com / Google Calendar | Agent 5 (scheduling) |
 
 ## The webhook contract (both directions)
 

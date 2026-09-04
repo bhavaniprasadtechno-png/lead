@@ -16,7 +16,7 @@
       "typeVersion": 2,
       "position": [220, -100],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $env.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
       }
     },
     {
@@ -27,7 +27,7 @@
       "position": [440, -100],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/analytics/overview?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/analytics/overview?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -44,7 +44,7 @@
       "typeVersion": 2,
       "position": [220, 100],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $env.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
       }
     },
     {
@@ -55,7 +55,7 @@
       "position": [440, 100],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/housekeeping?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/housekeeping?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

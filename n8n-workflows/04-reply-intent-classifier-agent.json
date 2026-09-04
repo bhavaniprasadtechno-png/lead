@@ -17,7 +17,7 @@
       "typeVersion": 2,
       "position": [220, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { threadId: $json.threadId, replyText: $json.snippet || $json.text, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { threadId: $json.threadId, replyText: $json.snippet || $json.text, timestamp, signature } }];"
       }
     },
     {
@@ -28,7 +28,7 @@
       "position": [440, 0],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/leads/by-thread/{{$json.threadId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/leads/by-thread/{{$json.threadId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -45,7 +45,7 @@
       "typeVersion": 2,
       "position": [660, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $json.orgId, lead: $json.lead, replyText: $('Sign: Match Thread').first().json.replyText, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $json.orgId, lead: $json.lead, replyText: $('Sign: Match Thread').first().json.replyText, timestamp, signature } }];"
       }
     },
     {
@@ -56,7 +56,7 @@
       "position": [880, 0],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/classifier?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/classifier?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -112,7 +112,7 @@
       "typeVersion": 2,
       "position": [1540, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = { event: 'reply.classified', orgId: p.orgId, leadId: p.leadId, agentType: 'classifier', input: { reply: 'redacted' }, output: { intent: p.intent, confidence: p.confidence, suggested_reply: p.suggested_reply }, requiresHumanReview: p.requires_human_review === true };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = { event: 'reply.classified', orgId: p.orgId, leadId: p.leadId, agentType: 'classifier', input: { reply: 'redacted' }, output: { intent: p.intent, confidence: p.confidence, suggested_reply: p.suggested_reply }, requiresHumanReview: p.requires_human_review === true };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -123,7 +123,7 @@
       "position": [1760, 0],
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APP_BASE_URL}}/api/webhooks/inbound",
+        "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

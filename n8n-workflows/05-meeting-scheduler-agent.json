@@ -17,7 +17,7 @@
       "typeVersion": 2,
       "position": [220, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { leadId: $json.leadId, orgId: $json.orgId, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { leadId: $json.leadId, orgId: $json.orgId, timestamp, signature } }];"
       }
     },
     {
@@ -28,7 +28,7 @@
       "position": [440, -100],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/scheduler?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/scheduler?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -45,7 +45,7 @@
       "typeVersion": 2,
       "position": [440, 100],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
       }
     },
     {
@@ -56,7 +56,7 @@
       "position": [660, 100],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -102,7 +102,7 @@
       "typeVersion": 2,
       "position": [1100, 0],
       "parameters": {
-        "jsCode": "const text = $input.first().json.content[0].text;\nconst parsed = JSON.parse(text);\nconst bookingLink = $env.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.content[0].text;\nconst parsed = JSON.parse(text);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
       }
     },
     {
@@ -133,7 +133,7 @@
       "typeVersion": 2,
       "position": [1540, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Booking Message').first().json;\nconst body = { event: 'meeting.booked', orgId: p.orgId, leadId: p.leadId, agentType: 'scheduler', input: {}, output: { bookingLink: p.bookingLink, subject: p.subject }, requiresHumanReview: false };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Booking Message').first().json;\nconst body = { event: 'meeting.booked', orgId: p.orgId, leadId: p.leadId, agentType: 'scheduler', input: {}, output: { bookingLink: p.bookingLink, subject: p.subject }, requiresHumanReview: false };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -145,7 +145,7 @@
       "notes": "In production, prefer a Cal.com/Google Calendar 'booking confirmed' webhook to fire this instead of firing immediately after the invite email — this models the simpler 'propose a link' flow from the spec.",
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APP_BASE_URL}}/api/webhooks/inbound",
+        "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

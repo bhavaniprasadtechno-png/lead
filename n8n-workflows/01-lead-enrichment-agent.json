@@ -21,7 +21,7 @@
       "typeVersion": 2,
       "position": [220, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { leadId: body.payload.leadId, orgId: body.payload.orgId } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { leadId: body.payload.leadId, orgId: body.payload.orgId } }];"
       }
     },
     {
@@ -31,7 +31,7 @@
       "typeVersion": 2,
       "position": [440, -120],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
       }
     },
     {
@@ -42,7 +42,7 @@
       "position": [660, -120],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/enricher?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/enricher?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -59,7 +59,7 @@
       "typeVersion": 2,
       "position": [440, 120],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
       }
     },
     {
@@ -70,7 +70,7 @@
       "position": [660, 120],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -147,7 +147,7 @@
       "typeVersion": 2,
       "position": [1540, 60],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { companySize: $json.company_size, industry: $json.industry, revenueRange: $json.revenue_range, technologiesUsed: $json.technologies_used, socialProfiles: $json.social_profiles };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, body, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { companySize: $json.company_size, industry: $json.industry, revenueRange: $json.revenue_range, technologiesUsed: $json.technologies_used, socialProfiles: $json.social_profiles };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, body, rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -158,7 +158,7 @@
       "position": [1760, 60],
       "parameters": {
         "method": "PATCH",
-        "url": "={{$env.APP_BASE_URL}}/api/leads/{{$json.leadId}}/enrichment",
+        "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}/enrichment",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -179,7 +179,7 @@
       "typeVersion": 2,
       "position": [1980, 60],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { leadId: $json.leadId, input: { leadId: $json.leadId }, output: $json, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { leadId: $json.leadId, input: { leadId: $json.leadId }, output: $json, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -190,7 +190,7 @@
       "position": [2200, 60],
       "parameters": {
         "method": "POST",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

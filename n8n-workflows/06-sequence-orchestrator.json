@@ -17,7 +17,7 @@
       "position": [220, 0],
       "notes": "ORG_ID is single-tenant here for simplicity; for multi-org, precede this with a loop over an org list.",
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $env.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
       }
     },
     {
@@ -28,7 +28,7 @@
       "position": [440, 0],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/sequences/due?orgId={{$json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/sequences/due?orgId={{$json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -53,7 +53,7 @@
       "typeVersion": 2,
       "position": [880, 0],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
       }
     },
     {
@@ -64,7 +64,7 @@
       "position": [1100, 0],
       "parameters": {
         "method": "GET",
-        "url": "={{$env.APP_BASE_URL}}/api/agents/by-type/orchestrator?orgId={{$('Sign: Get Due Steps').first().json.orgId}}",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/orchestrator?orgId={{$('Sign: Get Due Steps').first().json.orgId}}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
