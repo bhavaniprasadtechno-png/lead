@@ -12,7 +12,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries go through Supabase's transaction-mode pooler (IPv4,
+  // pgbouncer) — Supabase's *direct* host (db.<ref>.supabase.co) is
+  // IPv6-only, which most hosts (Render included) can't reach.
+  url = env("DATABASE_URL")
+  // Migrations need a session-level connection (advisory locks, DDL),
+  // which pgbouncer's transaction mode doesn't support — this points at
+  // the session-mode pooler instead, still IPv4.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
