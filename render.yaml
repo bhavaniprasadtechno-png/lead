@@ -1,0 +1,39 @@
+# Render Blueprint — deploys the LeadPilot web app (Next.js dashboard + API)
+# as a single Docker-based web service. Database is external (Supabase),
+# so no Render-managed Postgres is declared here.
+#
+# Deploy: Render dashboard → New → Blueprint → select this repo. Render
+# reads this file automatically. After the first deploy, fill in the
+# `sync: false` env vars below in the service's Environment tab — they
+# hold secrets/URLs this blueprint intentionally does not commit.
+
+services:
+  - type: web
+    name: leadpilot-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # "free" works too, but the service spins down on idle, which can make
+    # it miss/timeout n8n's webhook calls after inactivity
+    plan: starter
+    region: oregon
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      # Supabase (or any Postgres) direct connection string, e.g.
+      # postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # Session JWT signing secret — let Render generate one
+      - key: AUTH_SECRET
+        generateValue: true
+      # Bare n8n instance URL, e.g. https://<subdomain>.app.n8n.cloud
+      # (the app appends /webhook/<event> itself — see src/lib/n8n.ts)
+      - key: N8N_WEBHOOK_BASE_URL
+        sync: false
+      # Must match N8N_WEBHOOK_SECRET set in n8n (Settings > Variables)
+      - key: N8N_WEBHOOK_SECRET
+        sync: false
+      # Reserved for future BullMQ queues — optional, leave unset until used
+      - key: REDIS_URL
+        sync: false
