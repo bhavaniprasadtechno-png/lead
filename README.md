@@ -1,7 +1,8 @@
 # LeadPilot — AI-Powered Lead Generation & Management Platform
 
-Captures leads from multiple channels, uses AI (Claude) to enrich, score,
-and qualify them, and runs autonomous n8n "agents" to nurture leads via
+Captures leads from multiple channels, uses AI (via OpenRouter — currently
+NVIDIA Nemotron 3 Ultra) to enrich, score, and qualify them, and runs
+autonomous n8n "agents" to nurture leads via
 personalized email sequences until they convert or disqualify — with
 humans stepping in only at high-value decision points (meeting booked,
 objection handling, pricing questions).
@@ -13,7 +14,7 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 
 ```
 ┌─────────────┐      REST/Webhooks      ┌──────────────┐      API calls      ┌─────────────┐
-│   Web App    │◄───────────────────────►│     n8n      │◄───────────────────►│  Claude API  │
+│   Web App    │◄───────────────────────►│     n8n      │◄───────────────────►│  OpenRouter  │
 │ (Next.js)    │                          │ (Agent Layer)│                     │  / Email /   │
 │  + Postgres  │                          │              │                     │  Enrichment  │
 └─────────────┘                          └──────────────┘                     └─────────────┘
@@ -39,22 +40,36 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 | # | Agent | Trigger | What it does |
 |---|---|---|---|
 | 1 | Lead Enrichment | `lead.created` webhook | Apollo/Clearbit lookup → normalizes → `PATCH /leads/:id/enrichment` |
-| 2 | Lead Scoring & Qualification | `lead.enriched` webhook | Claude scores 0–100 with reasoning → `PATCH /leads/:id` (app auto-qualifies at ≥60) |
-| 3 | Email Personalization & Sender | `lead.qualified` webhook / sequence step due | Claude drafts subject+body from lead + template → sends → logs activity |
+| 2 | Lead Scoring & Qualification | `lead.enriched` webhook | The LLM scores 0–100 with reasoning → `PATCH /leads/:id` (app auto-qualifies at ≥60) |
+| 3 | Email Personalization & Sender | `lead.qualified` webhook / sequence step due | The LLM drafts subject+body from lead + template → sends → logs activity |
 | 4 | Reply Intent Classifier | Gmail/Graph trigger | Matches thread → lead, classifies intent, routes (interested/objection/lost/etc.) |
 | 5 | Meeting Scheduler | chained from Agent 4 | Proposes a booking link, updates lead to `meeting_booked` |
 | 6 | Sequence / Drip Orchestrator | cron (30 min) | Polls due sequence steps, decides whether to advance, triggers Agent 3 |
 | 7 | Data Sync / Housekeeping | cron (nightly) | Summarizes bounces/unsubscribes/funnel into a Slack digest |
-| 8 | ICP Lead Prospector | `icp.discover` webhook (user clicks "Run Search Now") | Claude + live web search find candidates matching a user-defined ICP → reports back → verifiable candidates become leads |
+| 8 | ICP Lead Prospector | `icp.discover` webhook (user clicks "Run Search Now") | Finds candidates matching a user-defined ICP → reports back → verifiable candidates become leads |
+
+Every "the LLM" above is called through **OpenRouter**
+(`https://openrouter.ai/api/v1/chat/completions`, OpenAI-compatible), not
+Anthropic directly — see `n8n-workflows/README.md` for the exact request
+shape and the `OPENROUTER_API_KEY` Variable every workflow needs.
 
 ### AI-driven lead discovery (ICP Search)
 
 Define an **Ideal Customer Profile** — target industries, company size
 range, job titles, geographies, tech stack, and other buying-intent
 keywords — on the **ICP Search** page, then click **Run Search Now**.
-Agent 8 uses Claude's web search tool to research the open web for
-matching companies and people, grounding every candidate in a real,
-cited source (never inventing a person, company, or email). Only
+
+> **Known gap:** Agent 8 was designed around Claude's hosted web search
+> tool, which has no OpenRouter/Nemotron equivalent — server-side tools
+> are provider-specific. As shipped, Agent 8's model has no live search
+> access, so it correctly returns an empty candidate list rather than
+> fabricate one (its prompt explicitly forbids answering from training
+> data). To restore real prospecting, wire a search API (Tavily, Serper,
+> Bing) into the workflow ahead of the LLM call — see the node's `notes`
+> in `n8n-workflows/08-icp-lead-prospector.json`.
+
+Candidates found (once search is wired back in) are grounded in a real,
+cited source — never an invented person, company, or email. Only
 candidates where a real email was found become `Lead` records
 (`source = ai_discovery`) and re-enter the exact same enrichment →
 scoring → outreach pipeline as any other lead; candidates without a
@@ -157,10 +172,9 @@ Visit http://localhost:3000.
 
 Import the workflows in `n8n-workflows/` into your n8n instance (see
 `n8n-workflows/README.md` for the exact steps, required credentials, and
-the full webhook contract table), set `APP_BASE_URL` and
-`N8N_WEBHOOK_SECRET` to match this app's `.env`, and connect your Claude,
-Apollo/Clearbit, Postmark/SES, Gmail, and Cal.com credentials in n8n's
-credential store.
+the full webhook contract table), set `APP_BASE_URL`, `N8N_WEBHOOK_SECRET`,
+and `OPENROUTER_API_KEY` as n8n Variables, and connect your Apollo/Clearbit,
+Postmark/SES, Gmail, and Cal.com credentials in n8n's credential store.
 
 ### 6. Deploy (Render)
 

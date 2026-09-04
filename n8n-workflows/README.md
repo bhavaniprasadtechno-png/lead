@@ -38,6 +38,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 |---|---|---|
 | `N8N_WEBHOOK_SECRET` | A secret **you generate** — e.g. `openssl rand -base64 32`. This is not provided by n8n; it's a shared password you invent and set in **both** n8n and the app's `N8N_WEBHOOK_SECRET` env var, byte-for-byte identical. | every workflow (signing/verifying every request) |
 | `APP_BASE_URL` | Your deployed app's public URL, e.g. `https://leadpilot-web.onrender.com` (no trailing slash) | every workflow that calls the app's API |
+| `OPENROUTER_API_KEY` | Your [OpenRouter](https://openrouter.ai) API key (`sk-or-v1-...`) — sent as `Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}` on every "Call LLM" node. Not an n8n credential — just a Variable, same pattern as everything else on this page. | every workflow's LLM call |
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
@@ -48,16 +49,50 @@ workflow JSON):
 
 | Credential | Used for |
 |---|---|
-| Claude API (Anthropic) | Every "Call Claude" HTTP Request node |
 | Apollo/Clearbit API | Agent 1 (enrichment) |
 | Postmark/SES | Agent 3 (sending) |
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
 
-Agent 8's Claude credential additionally needs **web search enabled** for
-the workspace (Anthropic Console → Settings) — it uses Claude's
-server-side `web_search` tool, not a separate search API. No extra n8n
-credential beyond the Claude one is needed for it.
+Every LLM call goes through OpenRouter's OpenAI-compatible
+`/chat/completions` API instead of a dedicated n8n credential type —
+see **The LLM call shape** below.
+
+### The LLM call shape (OpenRouter, OpenAI-compatible)
+
+Every "Call LLM" node in these workflows is the same shape:
+
+```
+POST https://openrouter.ai/api/v1/chat/completions
+Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}
+content-type: application/json
+
+{
+  "model": "<agent.model from the app, e.g. nvidia/nemotron-3-ultra-550b-a55b:free>",
+  "max_tokens": <N>,
+  "messages": [
+    { "role": "system", "content": "<agent.systemPrompt from the app>" },
+    { "role": "user", "content": "<JSON-stringified context>" }
+  ]
+}
+```
+
+This differs from Anthropic's Messages API in two ways worth knowing if
+you swap models again later: the system prompt is a `role: "system"`
+message inside the `messages` array (not a separate top-level `system`
+field), and the model's answer comes back as a plain string at
+`response.choices[0].message.content` (not a `content` block array). The
+"Parse ... JSON" Code node right after each LLM call reads that path and
+`JSON.parse()`s it — every agent's system prompt ends with a strict-JSON
+output instruction so this always has something parseable to read.
+
+Change the model for any agent from the app's **AI Agents** page (per-org,
+no redeploy needed) — pick any [OpenRouter model slug](https://openrouter.ai/models),
+not just the NVIDIA Nemotron default. Note Agent 8 (Prospector) needs a
+model that's actually good at following a strict-JSON instruction with no
+grounding data, since (unlike Claude) it has no hosted web search tool —
+see the note in `08-icp-lead-prospector.json` and the README's "AI-driven
+lead discovery" section.
 
 ## The webhook contract (both directions)
 
@@ -141,8 +176,11 @@ Active for the app's automatic calls to reach it.
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
   app's **Approvals** queue and is never auto-sent.
-- Agent 8 never fabricates a lead: only candidates where Claude found a
-  real, cited email become `Lead` rows (`source = ai_discovery`); every
-  candidate it returns — with or without an email — is still stored on
-  the `LeadDiscoveryRun.candidates` field for review, so nothing found is
-  silently dropped, just not all of it becomes an actionable lead.
+- Agent 8 never fabricates a lead: only candidates with a real, cited
+  email become `Lead` rows (`source = ai_discovery`); every candidate it
+  returns — with or without an email — is still stored on the
+  `LeadDiscoveryRun.candidates` field for review, so nothing found is
+  silently dropped, just not all of it becomes an actionable lead. As
+  shipped it has no live search access (see the note above), so in
+  practice it will honestly return an empty list until you wire a search
+  API into the workflow.

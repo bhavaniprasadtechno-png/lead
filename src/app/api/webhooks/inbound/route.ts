@@ -8,7 +8,7 @@ const schema = z.object({
   orgId: z.string().uuid(),
   leadId: z.string().uuid(),
   enrollmentId: z.string().uuid().optional(),
-  agentType: z.enum(["enricher", "scorer", "writer", "classifier", "scheduler", "orchestrator", "housekeeping"]).optional(),
+  agentType: z.enum(["enricher", "scorer", "writer", "classifier", "scheduler", "orchestrator", "housekeeping", "prospector"]).optional(),
   input: z.record(z.string(), z.any()).optional(),
   output: z.record(z.string(), z.any()).optional(),
   requiresHumanReview: z.boolean().default(false),

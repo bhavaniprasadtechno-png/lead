@@ -15,7 +15,7 @@ const upsertSchema = z.object({
     "microsoft_graph",
     "cal_com",
     "google_calendar",
-    "claude",
+    "openrouter",
   ]),
   credentialRef: z.string().optional(),
   status: z.enum(["connected", "disconnected", "error"]).default("connected"),

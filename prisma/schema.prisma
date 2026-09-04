@@ -371,7 +371,10 @@ model Agent {
   name         String
   type         AgentType
   systemPrompt String    @map("system_prompt")
-  model        String    @default("claude-sonnet-5")
+  // OpenRouter model slug ("provider/model[:variant]"), called via
+  // OpenRouter's OpenAI-compatible /chat/completions API — see
+  // n8n-workflows/README.md for the request shape every agent uses.
+  model        String    @default("nvidia/nemotron-3-ultra-550b-a55b:free")
   isActive     Boolean   @default(true) @map("is_active")
   config       Json?
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -426,7 +429,7 @@ enum IntegrationProvider {
   microsoft_graph
   cal_com
   google_calendar
-  claude
+  openrouter
 }
 
 enum IntegrationStatus {

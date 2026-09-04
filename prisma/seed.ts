@@ -40,7 +40,7 @@ async function main() {
           name: def.name,
           type: def.type as any,
           systemPrompt: def.prompt,
-          model: "claude-sonnet-5",
+          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
           isActive: true,
         },
       }));

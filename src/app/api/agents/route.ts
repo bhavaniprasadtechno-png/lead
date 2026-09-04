@@ -4,9 +4,9 @@ import { requireOrgSession, handleApiError, json } from "@/lib/api";
 
 const createSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["enricher", "scorer", "writer", "classifier", "scheduler", "orchestrator", "housekeeping"]),
+  type: z.enum(["enricher", "scorer", "writer", "classifier", "scheduler", "orchestrator", "housekeeping", "prospector"]),
   systemPrompt: z.string().min(1),
-  model: z.string().default("claude-sonnet-5"),
+  model: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
   config: z.record(z.string(), z.any()).optional(),
 });
 
