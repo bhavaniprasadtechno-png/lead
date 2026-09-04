@@ -72,11 +72,35 @@ goes out.
 
 ## Getting started
 
-### 1. Local infra
+### 1. Database
+
+Either run Postgres locally:
 
 ```bash
 docker compose up -d postgres redis n8n
 ```
+
+...or point at a hosted **Supabase** Postgres instance instead — no code
+changes needed, this app talks to it exactly like any other Postgres
+database via Prisma:
+
+1. In the Supabase dashboard: **Settings → Database → Connection string →
+   URI** (the *direct* connection, not the pooler — Prisma's migration
+   engine needs a direct connection). Copy it and fill in your database
+   password (**Settings → Database → Reset database password** if you
+   don't have it — this is separate from the `sb_publishable_…` /
+   `sb_secret_…` API keys, which this app doesn't use since it talks to
+   Postgres directly rather than through Supabase's Data API/Auth).
+2. Set `DATABASE_URL` in `.env` to that string, appending `?sslmode=require`.
+3. Run the migration + seed steps below as normal.
+
+> Supabase's Postgres is reachable only from environments with outbound
+> network access to `*.supabase.co` — some sandboxed/CI environments
+> restrict this by policy. If `npx prisma migrate deploy` can't reach it,
+> either run these steps from a machine with normal internet access, or
+> paste the contents of `prisma/migrations/*/migration.sql` into
+> Supabase's **SQL Editor** to create the tables directly, then run
+> `npm run db:seed` from wherever `DATABASE_URL` is reachable.
 
 ### 2. Configure env
 
@@ -91,7 +115,7 @@ openssl rand -base64 32   # → N8N_WEBHOOK_SECRET
 
 ```bash
 npm install
-npm run db:migrate   # creates tables
+npm run db:migrate   # creates tables (use `npx prisma migrate deploy` against an existing DB, e.g. Supabase)
 npm run db:seed      # demo org + agents + sample leads/campaigns
 ```
 
