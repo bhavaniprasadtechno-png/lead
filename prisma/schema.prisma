@@ -3,7 +3,11 @@
 // exclusively through the REST API layer in src/app/api — never directly.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" covers local dev + Render's (glibc) native Node runtime;
+  // linux-musl-openssl-3.0.x covers the Alpine-based Dockerfile used by
+  // docker-compose / any Docker-based deploy.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

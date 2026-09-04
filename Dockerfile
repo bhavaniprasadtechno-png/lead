@@ -1,4 +1,8 @@
 FROM node:22-alpine AS base
+# node:22-alpine ships no OpenSSL by default — Prisma's query engine needs
+# libssl at both `prisma generate` time and runtime, or it fails with
+# "Error loading shared library libssl.so.1.1: No such file or directory".
+RUN apk add --no-cache openssl
 
 FROM base AS deps
 WORKDIR /app
