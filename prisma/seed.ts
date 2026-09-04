@@ -313,6 +313,80 @@ async function main() {
     }
   }
 
+  // Sample ICP + a completed discovery run, so the ICP Search page has
+  // something to show immediately.
+  let icp = await prisma.icpProfile.findFirst({ where: { orgId: org.id, name: "Mid-market RevOps leaders" } });
+  if (!icp) {
+    icp = await prisma.icpProfile.create({
+      data: {
+        orgId: org.id,
+        name: "Mid-market RevOps leaders",
+        description: "SaaS companies scaling their inbound funnel who'd benefit from AI lead qualification",
+        industries: ["B2B SaaS"],
+        companySizeMin: 51,
+        companySizeMax: 500,
+        jobTitles: ["VP Revenue Operations", "Head of Sales Development", "Director of Growth"],
+        geographies: ["United States", "Canada"],
+        technologies: ["Salesforce", "HubSpot"],
+        keywords: ["hiring SDRs", "recently funded"],
+      },
+    });
+  }
+
+  const existingRun = await prisma.leadDiscoveryRun.findFirst({ where: { icpId: icp.id } });
+  if (!existingRun) {
+    const dockyardLead = await prisma.lead.findFirst({ where: { orgId: org.id, email: "sam.rivera@dockyard-systems.com" } });
+    const candidates = [
+      {
+        firstName: "Sam",
+        lastName: "Rivera",
+        email: "sam.rivera@dockyard-systems.com",
+        company: "Dockyard Systems",
+        jobTitle: "Sales Ops Manager",
+        linkedinUrl: null,
+        website: "https://dockyard-systems.com",
+        sourceUrl: "https://dockyard-systems.com/team",
+        matchReason: "Sales Ops leader at a mid-market SaaS company matching target company size.",
+        confidence: 0.82,
+      },
+      {
+        firstName: "Jordan",
+        lastName: "Blake",
+        email: null,
+        company: "Northfield Analytics",
+        jobTitle: "VP Revenue Operations",
+        linkedinUrl: "https://linkedin.com/in/example-jordan-blake",
+        website: "https://northfield-analytics.example.com",
+        sourceUrl: "https://northfield-analytics.example.com/about",
+        matchReason: "Title and company profile match the ICP, but no public email was found.",
+        confidence: 0.64,
+      },
+    ];
+
+    const run = await prisma.leadDiscoveryRun.create({
+      data: {
+        icpId: icp.id,
+        orgId: org.id,
+        status: "completed",
+        triggeredBy: user.id,
+        candidates,
+        leadsFound: candidates.length,
+        leadsCreated: dockyardLead ? 1 : 0,
+        leadsSkipped: 0,
+        completedAt: new Date(),
+      },
+    });
+
+    // Link the already-seeded matching lead back to this ICP/run for the
+    // "View leads from this ICP" filter to have something to show.
+    if (dockyardLead) {
+      await prisma.lead.update({
+        where: { id: dockyardLead.id },
+        data: { icpId: icp.id, discoveryRunId: run.id, source: "ai_discovery" },
+      });
+    }
+  }
+
   console.log("Seed complete.");
   console.log(`Login: ${email} / ${password}`);
 }

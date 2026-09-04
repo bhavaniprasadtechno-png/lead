@@ -45,6 +45,22 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 | 5 | Meeting Scheduler | chained from Agent 4 | Proposes a booking link, updates lead to `meeting_booked` |
 | 6 | Sequence / Drip Orchestrator | cron (30 min) | Polls due sequence steps, decides whether to advance, triggers Agent 3 |
 | 7 | Data Sync / Housekeeping | cron (nightly) | Summarizes bounces/unsubscribes/funnel into a Slack digest |
+| 8 | ICP Lead Prospector | `icp.discover` webhook (user clicks "Run Search Now") | Claude + live web search find candidates matching a user-defined ICP → reports back → verifiable candidates become leads |
+
+### AI-driven lead discovery (ICP Search)
+
+Define an **Ideal Customer Profile** — target industries, company size
+range, job titles, geographies, tech stack, and other buying-intent
+keywords — on the **ICP Search** page, then click **Run Search Now**.
+Agent 8 uses Claude's web search tool to research the open web for
+matching companies and people, grounding every candidate in a real,
+cited source (never inventing a person, company, or email). Only
+candidates where a real email was found become `Lead` records
+(`source = ai_discovery`) and re-enter the exact same enrichment →
+scoring → outreach pipeline as any other lead; candidates without a
+verifiable email are still kept on the run for review, just not
+auto-imported. Every run is deduped against existing leads by email
+within the org.
 
 Every agent's **system prompt lives in the database** (`agents.system_prompt`,
 editable from the **AI Agents** page in the app UI) — n8n fetches it at
@@ -196,6 +212,9 @@ See `prisma/schema.prisma` for the authoritative model. Highlights:
   agent or human did to a lead
 - `agents` / `agent_runs` — agent configuration (including the tunable
   system prompt) and every execution's input/output/latency/status
+- `icp_profiles` / `lead_discovery_runs` — user-defined Ideal Customer
+  Profiles and the Prospector agent's search history against each one
+  (full candidate list kept for audit, even candidates not imported)
 - `integrations` / `webhooks_inbound_log` — connection status for external
   providers and the signed-webhook audit trail
 

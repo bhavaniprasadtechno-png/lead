@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireOrgSession, handleApiError, json } from "@/lib/api";
-import { triggerN8nWebhook } from "@/lib/n8n";
+import { createLead } from "@/lib/leads";
 
 const createSchema = z.object({
   firstName: z.string().min(1),
@@ -22,12 +22,14 @@ export async function GET(req: Request) {
     const session = await requireOrgSession();
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
+    const icpId = searchParams.get("icpId");
     const q = searchParams.get("q");
 
     const leads = await prisma.lead.findMany({
       where: {
         orgId: session.orgId,
         ...(status ? { status: status as any } : {}),
+        ...(icpId ? { icpId } : {}),
         ...(q
           ? {
               OR: [
@@ -58,33 +60,18 @@ export async function POST(req: Request) {
       return json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, 422);
     }
 
-    const lead = await prisma.lead.create({
-      data: {
-        orgId: session.orgId,
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        company: parsed.data.company,
-        jobTitle: parsed.data.jobTitle,
-        linkedinUrl: parsed.data.linkedinUrl || undefined,
-        website: parsed.data.website,
-        source: parsed.data.source,
-        status: "new",
-      },
+    const lead = await createLead({
+      orgId: session.orgId,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+      company: parsed.data.company,
+      jobTitle: parsed.data.jobTitle,
+      linkedinUrl: parsed.data.linkedinUrl || undefined,
+      website: parsed.data.website,
+      source: parsed.data.source,
     });
-
-    await prisma.activity.create({
-      data: {
-        leadId: lead.id,
-        type: "status_change",
-        actor: "human",
-        payload: { to: "new" },
-      },
-    });
-
-    // Hand off to the n8n agent layer for enrichment -> scoring -> outreach.
-    await triggerN8nWebhook("lead.created", { leadId: lead.id, orgId: session.orgId });
 
     return json({ lead }, 201);
   } catch (err) {

@@ -1,0 +1,207 @@
+{
+  "name": "Agent 8 — ICP Lead Prospector",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Webhook: icp.discover",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": { "path": "icp.discover", "httpMethod": "POST", "responseMode": "onReceived", "options": {} }
+    },
+    {
+      "id": "verify",
+      "name": "Verify Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst signature = $request.headers['x-signature'];\nconst timestamp = Number($request.headers['x-timestamp']);\nconst rawBody = JSON.stringify($input.first().json.body);\nconst expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nif (!signature || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000 || signature !== expected) {\n  throw new Error('Invalid or stale webhook signature');\n}\nconst body = $input.first().json.body;\nreturn [{ json: { icpId: body.payload.icpId, runId: body.payload.runId, orgId: body.payload.orgId } }];"
+      }
+    },
+    {
+      "id": "signGetPrompt",
+      "name": "Sign: Get Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -120],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getPrompt",
+      "name": "GET Agent Prompt (prospector)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -120],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/prospector?orgId={{$json.orgId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "signGetIcp",
+      "name": "Sign: Get ICP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 120],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "getIcp",
+      "name": "GET ICP Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 120],
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.APP_BASE_URL}}/api/icp-profiles/{{$json.icpId}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "callClaude",
+      "name": "Call Claude (Web Search)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "notes": "Uses Anthropic's server-side web_search tool — Claude runs its own multi-query research loop inside this one call and returns the final JSON in its last text block. No client-side tool loop needed. The Anthropic account must have web search enabled (Console → Settings).",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "model", "value": "={{$('GET Agent Prompt (prospector)').first().json.agent.model}}" },
+            { "name": "max_tokens", "value": "4096" },
+            { "name": "system", "value": "={{$('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}}" },
+            {
+              "name": "tools",
+              "value": "={{[{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }]}}"
+            },
+            { "name": "messages", "value": "={{[{role:'user', content: JSON.stringify($('GET ICP Profile').first().json.icpProfile)}]}}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parseCandidates",
+      "name": "Parse Candidates JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "notes": "Web search interleaves text/tool-result blocks — the model's final structured answer is the LAST text block, per the prospector system prompt's instruction to end with strict JSON.",
+      "parameters": {
+        "jsCode": "const content = $input.first().json.content || [];\nconst textBlocks = content.filter(b => b.type === 'text');\nconst last = textBlocks[textBlocks.length - 1];\nlet candidates = [];\nlet errorMessage = null;\ntry {\n  const parsed = JSON.parse(last.text);\n  candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n} catch (e) {\n  errorMessage = 'Failed to parse Claude response as JSON: ' + e.message;\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
+      }
+    },
+    {
+      "id": "signResults",
+      "name": "Sign: Report Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = p.errorMessage\n  ? { status: 'failed', errorMessage: p.errorMessage }\n  : { status: 'completed', candidates: p.candidates };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "postResults",
+      "name": "POST /icp-profiles/:id/runs/:runId/results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.APP_BASE_URL}}/api/icp-profiles/{{$json.icpId}}/runs/{{$json.runId}}/results",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.rawBody}}"
+      }
+    },
+    {
+      "id": "signRunLog",
+      "name": "Sign: Log Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 0],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Candidates JSON').first().json;\nconst body = { input: { icpId: p.icpId }, output: { candidateCount: p.candidates.length }, status: p.errorMessage ? 'failure' : 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { agentId: p.agentId, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "logRun",
+      "name": "POST /agents/:id/runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-signature", "value": "={{$json.signature}}" },
+            { "name": "x-timestamp", "value": "={{$json.timestamp}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.rawBody}}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: icp.discover": { "main": [[{ "node": "Verify Signature", "type": "main", "index": 0 }]] },
+    "Verify Signature": {
+      "main": [[
+        { "node": "Sign: Get Prompt", "type": "main", "index": 0 },
+        { "node": "Sign: Get ICP", "type": "main", "index": 0 }
+      ]]
+    },
+    "Sign: Get Prompt": { "main": [[{ "node": "GET Agent Prompt (prospector)", "type": "main", "index": 0 }]] },
+    "Sign: Get ICP": { "main": [[{ "node": "GET ICP Profile", "type": "main", "index": 0 }]] },
+    "GET Agent Prompt (prospector)": { "main": [[{ "node": "Call Claude (Web Search)", "type": "main", "index": 0 }]] },
+    "GET ICP Profile": { "main": [[{ "node": "Call Claude (Web Search)", "type": "main", "index": 0 }]] },
+    "Call Claude (Web Search)": { "main": [[{ "node": "Parse Candidates JSON", "type": "main", "index": 0 }]] },
+    "Parse Candidates JSON": { "main": [[{ "node": "Sign: Report Results", "type": "main", "index": 0 }]] },
+    "Sign: Report Results": { "main": [[{ "node": "POST /icp-profiles/:id/runs/:runId/results", "type": "main", "index": 0 }]] },
+    "POST /icp-profiles/:id/runs/:runId/results": { "main": [[{ "node": "Sign: Log Run", "type": "main", "index": 0 }]] },
+    "Sign: Log Run": { "main": [[{ "node": "POST /agents/:id/runs", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

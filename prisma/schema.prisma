@@ -32,12 +32,14 @@ model Organization {
   plan      String   @default("trial")
   createdAt DateTime @default(now()) @map("created_at")
 
-  users            User[]
-  leads            Lead[]
-  campaigns        Campaign[]
-  emailTemplates   EmailTemplate[]
-  agents           Agent[]
-  integrations     Integration[]
+  users             User[]
+  leads             Lead[]
+  campaigns         Campaign[]
+  emailTemplates    EmailTemplate[]
+  agents            Agent[]
+  integrations      Integration[]
+  icpProfiles       IcpProfile[]
+  leadDiscoveryRuns LeadDiscoveryRun[]
 
   @@map("organizations")
 }
@@ -88,30 +90,35 @@ enum LeadSource {
   linkedin
   referral
   manual
+  ai_discovery
   other
 }
 
 model Lead {
-  id           String     @id @default(uuid())
-  orgId        String     @map("org_id")
-  source       LeadSource @default(manual)
-  firstName    String     @map("first_name")
-  lastName     String?    @map("last_name")
-  email        String
-  phone        String?
-  company      String?
-  jobTitle     String?    @map("job_title")
-  linkedinUrl  String?    @map("linkedin_url")
-  website      String?
-  status       LeadStatus @default(new)
-  score        Int?
-  scoreReason  String?    @map("score_reason")
-  ownerId      String?    @map("owner_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  id             String     @id @default(uuid())
+  orgId          String     @map("org_id")
+  source         LeadSource @default(manual)
+  firstName      String     @map("first_name")
+  lastName       String?    @map("last_name")
+  email          String
+  phone          String?
+  company        String?
+  jobTitle       String?    @map("job_title")
+  linkedinUrl    String?    @map("linkedin_url")
+  website        String?
+  status         LeadStatus @default(new)
+  score          Int?
+  scoreReason    String?    @map("score_reason")
+  ownerId        String?    @map("owner_id")
+  icpId          String?    @map("icp_id")
+  discoveryRunId String?    @map("discovery_run_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
-  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  owner        User?           @relation("LeadOwner", fields: [ownerId], references: [id])
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner        User?             @relation("LeadOwner", fields: [ownerId], references: [id])
+  icp          IcpProfile?       @relation(fields: [icpId], references: [id], onDelete: SetNull)
+  discoveryRun LeadDiscoveryRun? @relation(fields: [discoveryRunId], references: [id], onDelete: SetNull)
   enrichment   LeadEnrichment?
   activities   Activity[]
   emailLogs    EmailLog[]
@@ -137,6 +144,71 @@ model LeadEnrichment {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@map("lead_enrichment")
+}
+
+// ---------------------------------------------------------------------------
+// ICP-driven lead discovery — user defines an Ideal Customer Profile, the
+// Prospector agent (n8n + Claude web search) searches the web for matching
+// candidates and reports them back; verifiable candidates (a real email
+// found) become Leads via the normal enrichment → scoring → outreach
+// pipeline, just like any other source.
+// ---------------------------------------------------------------------------
+
+model IcpProfile {
+  id             String   @id @default(uuid())
+  orgId          String   @map("org_id")
+  name           String
+  description    String?
+  industries     Json?    // string[]
+  companySizeMin Int?     @map("company_size_min")
+  companySizeMax Int?     @map("company_size_max")
+  jobTitles      Json?    // string[] — target personas/seniority
+  geographies    Json?    // string[]
+  technologies   Json?    // string[] — tech-stack signals
+  keywords       Json?    // string[] — other buying-intent signals
+  exclusions     String?  // free text: what to rule out
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization  Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+  discoveryRuns LeadDiscoveryRun[]
+
+  @@index([orgId])
+  @@map("icp_profiles")
+}
+
+enum DiscoveryRunStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+model LeadDiscoveryRun {
+  id           String             @id @default(uuid())
+  icpId        String             @map("icp_id")
+  orgId        String             @map("org_id")
+  status       DiscoveryRunStatus @default(queued)
+  triggeredBy  String?            @map("triggered_by")
+  // Full candidate list the Prospector agent returned, including
+  // candidates that didn't become a Lead (no verifiable email found) —
+  // kept for transparency/audit even though only a subset get imported.
+  candidates   Json?
+  leadsFound   Int?               @map("leads_found")
+  leadsCreated Int?               @map("leads_created")
+  leadsSkipped Int?               @map("leads_skipped")
+  errorMessage String?            @map("error_message")
+  startedAt    DateTime           @default(now()) @map("started_at")
+  completedAt  DateTime?          @map("completed_at")
+
+  icp          IcpProfile   @relation(fields: [icpId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@index([icpId])
+  @@map("lead_discovery_runs")
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +362,7 @@ enum AgentType {
   scheduler
   orchestrator
   housekeeping
+  prospector
 }
 
 model Agent {

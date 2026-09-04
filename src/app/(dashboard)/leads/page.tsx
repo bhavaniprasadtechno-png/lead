@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PageHeader, StatusBadge, ScoreBadge, EmptyState } from "@/components/ui";
 import { LEAD_STATUSES } from "@/lib/constants";
 
@@ -19,6 +20,8 @@ interface Lead {
 }
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
+  const icpId = searchParams.get("icpId");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -30,11 +33,12 @@ export default function LeadsPage() {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (status) params.set("status", status);
+    if (icpId) params.set("icpId", icpId);
     const res = await fetch(`/api/leads?${params.toString()}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
     setLoading(false);
-  }, [q, status]);
+  }, [q, status, icpId]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -53,6 +57,14 @@ export default function LeadsPage() {
         }
       />
       <div className="p-8">
+        {icpId && (
+          <div className="card p-3 mb-4 text-sm bg-brand-50 border-brand-200 text-brand-700 flex items-center justify-between">
+            <span>Filtered to leads discovered by one ICP</span>
+            <Link href="/leads" className="font-medium hover:underline">
+              Clear filter
+            </Link>
+          </div>
+        )}
         <div className="flex gap-3 mb-4">
           <input
             className="input max-w-xs"

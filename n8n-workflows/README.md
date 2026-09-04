@@ -1,6 +1,6 @@
 # n8n Agent Workflows
 
-This directory contains importable n8n workflow definitions for the seven
+This directory contains importable n8n workflow definitions for the eight
 agents described in the platform architecture. Each workflow is the
 **execution/orchestration layer** for one AI agent — the app (Next.js +
 Postgres) remains the system of record and control plane. Workflows never
@@ -20,6 +20,7 @@ n8n import:workflow --input=n8n-workflows/04-reply-intent-classifier-agent.json
 n8n import:workflow --input=n8n-workflows/05-meeting-scheduler-agent.json
 n8n import:workflow --input=n8n-workflows/06-sequence-orchestrator.json
 n8n import:workflow --input=n8n-workflows/07-housekeeping-agent.json
+n8n import:workflow --input=n8n-workflows/08-icp-lead-prospector.json
 ```
 
 ## Required n8n Variables
@@ -52,6 +53,11 @@ workflow JSON):
 | Postmark/SES | Agent 3 (sending) |
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
+
+Agent 8's Claude credential additionally needs **web search enabled** for
+the workspace (Anthropic Console → Settings) — it uses Claude's
+server-side `web_search` tool, not a separate search API. No extra n8n
+credential beyond the Claude one is needed for it.
 
 ## The webhook contract (both directions)
 
@@ -86,6 +92,11 @@ prefix (e.g. `lead.enriched`, not `webhook/lead.enriched`).
 | `lead.created` | 01-lead-enrichment-agent | `lead.created` |
 | `lead.enriched` | 02-lead-scoring-agent | `lead.enriched` |
 | `lead.qualified` | 03-email-personalization-agent | `lead.qualified` |
+| `icp.discover` | 08-icp-lead-prospector | `icp.discover` |
+
+`icp.discover` is fired by `POST /api/icp-profiles/:id/discover`, which a
+user triggers from the app's **ICP** page (or you call directly) — it's
+not tied to any lead lifecycle event, it starts a fresh web search run.
 
 `email.replied` is fired by the app when a human decides on an item in the
 **Approvals** queue (`POST /api/approvals/:id`), but Agent 4 in this repo
@@ -113,6 +124,8 @@ Active for the app's automatic calls to reach it.
 | `POST /api/agents/:id/runs` | all agents — input/output/latency/cost logging |
 | `POST /api/webhooks/inbound` | Agents 3-5 — reply classification, meetings booked, bounces, sequence progression |
 | `GET /api/sequences/due?orgId=` | Agent 6, polling |
+| `GET /api/icp-profiles/:id` | Agent 8 — fetch ICP criteria to search against |
+| `POST /api/icp-profiles/:id/runs/:runId/results` | Agent 8 — report discovered candidates back |
 
 ## Notes
 
@@ -128,3 +141,8 @@ Active for the app's automatic calls to reach it.
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
   app's **Approvals** queue and is never auto-sent.
+- Agent 8 never fabricates a lead: only candidates where Claude found a
+  real, cited email become `Lead` rows (`source = ai_discovery`); every
+  candidate it returns — with or without an email — is still stored on
+  the `LeadDiscoveryRun.candidates` field for review, so nothing found is
+  silently dropped, just not all of it becomes an actionable lead.

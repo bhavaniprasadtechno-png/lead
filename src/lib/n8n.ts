@@ -11,7 +11,8 @@ export type N8nEvent =
   | "lead.enriched"
   | "lead.qualified"
   | "sequence.step_due"
-  | "email.replied";
+  | "email.replied"
+  | "icp.discover";
 
 export async function triggerN8nWebhook(event: N8nEvent, payload: Record<string, unknown>) {
   const baseUrl = process.env.N8N_WEBHOOK_BASE_URL;
