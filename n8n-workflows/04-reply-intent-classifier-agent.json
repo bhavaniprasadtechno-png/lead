@@ -133,7 +133,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (classifier)').first().json.agent.model}}"
+              "value": "={{ (() => { const m = $('GET Agent Prompt (classifier)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
             },
             {
               "name": "max_tokens",

@@ -31,7 +31,7 @@
         -100
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID || '2ab9b11b-94f9-475c-869a-f2572e7b0ed7', timestamp, signature } }];"
       }
     },
     {
@@ -71,7 +71,7 @@
         100
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID || '2ab9b11b-94f9-475c-869a-f2572e7b0ed7', timestamp, signature } }];"
       }
     },
     {
@@ -131,7 +131,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (housekeeping)').first().json.agent.model}}"
+              "value": "={{ (() => { const m = $('GET Agent Prompt (housekeeping)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
             },
             {
               "name": "max_tokens",
