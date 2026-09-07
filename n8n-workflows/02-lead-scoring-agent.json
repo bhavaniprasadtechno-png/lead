@@ -1,5 +1,5 @@
 {
-  "name": "Agent 2 — Lead Scoring & Qualification",
+  "name": "Agent 2 \u2014 Lead Scoring & Qualification",
   "nodes": [
     {
       "id": "trigger",
@@ -149,6 +149,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (scorer)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead (+ enrichment)').first().json.lead)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -164,7 +168,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (scorer)').first().json.agent.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (scorer)').first().json.agent.id, ...parsed } }];"
       }
     },
     {
@@ -189,7 +193,7 @@
         1540,
         -60
       ],
-      "notes": "The app auto-transitions the lead to 'qualified' and fires lead.qualified when score >= threshold — no extra branching needed here.",
+      "notes": "The app auto-transitions the lead to 'qualified' and fires lead.qualified when score >= threshold \u2014 no extra branching needed here.",
       "parameters": {
         "method": "PATCH",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",

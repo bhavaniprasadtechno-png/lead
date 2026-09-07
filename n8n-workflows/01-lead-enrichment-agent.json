@@ -1,5 +1,5 @@
 {
-  "name": "Agent 1 — Lead Enrichment",
+  "name": "Agent 1 \u2014 Lead Enrichment",
   "nodes": [
     {
       "id": "trigger",
@@ -176,6 +176,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (enricher)').first().json.agent.systemPrompt}, {role: 'user', content: JSON.stringify($('Apollo: Company/Contact Lookup').first().json)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -191,7 +195,7 @@
         120
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (enricher)').first().json.agent.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (enricher)').first().json.agent.id, ...parsed } }];"
       }
     },
     {

@@ -1,5 +1,5 @@
 {
-  "name": "Agent 4 — Reply Intent Classifier",
+  "name": "Agent 4 \u2014 Reply Intent Classifier",
   "nodes": [
     {
       "id": "trigger",
@@ -142,6 +142,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (classifier)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ reply: $('Sign: Get Prompt').first().json.replyText })}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -157,7 +161,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
       }
     },
     {

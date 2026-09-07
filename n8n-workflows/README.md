@@ -69,8 +69,9 @@ Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}
 content-type: application/json
 
 {
-  "model": "<agent.model from the app, e.g. gemma-3-27b-it>",
+  "model": "<agent.model from the app, e.g. gemini-2.5-flash>",
   "max_tokens": <N>,
+  "reasoning_effort": "none",
   "messages": [
     { "role": "system", "content": "<agent.systemPrompt from the app>" },
     { "role": "user", "content": "<JSON-stringified context>" }
@@ -81,22 +82,31 @@ content-type: application/json
 Google AI Studio (the Gemini API) exposes an OpenAI-compatible endpoint
 that accepts this exact request shape and returns this exact response
 shape, which is why swapping providers here only meant changing each "Call
-LLM" node's `url` and `Authorization` header — nothing about the body or
-the parsing logic changed. This differs from Anthropic's Messages API in
-two ways worth knowing if you swap models again later: the system prompt
-is a `role: "system"` message inside the `messages` array (not a separate
+LLM" node's `url` and `Authorization` header — nothing about the rest of
+the body changed. This differs from Anthropic's Messages API in two ways
+worth knowing if you swap models again later: the system prompt is a
+`role: "system"` message inside the `messages` array (not a separate
 top-level `system` field), and the model's answer comes back as a plain
 string at `response.choices[0].message.content` (not a `content` block
-array). The "Parse ... JSON" Code node right after each LLM call reads
-that path and `JSON.parse()`s it — every agent's system prompt ends with a
-strict-JSON output instruction so this always has something parseable to
-read.
+array).
+
+Every current Gemini model (2.5+) does "thinking" by default, which
+consumes `max_tokens` on invisible reasoning before any visible output —
+at the small `max_tokens` budgets these agents use (256–1024), that was
+enough to return an empty/truncated response with nothing to parse.
+`reasoning_effort: "none"` disables it. Separately, Gemini tends to wrap
+JSON replies in ` ```json ... ``` ` fences even when the system prompt
+demands strict JSON, so every "Parse ... JSON" Code node strips a leading/
+trailing fence (`text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')`)
+before `JSON.parse()`s it, rather than trusting any one provider's
+formatting compliance — every agent's system prompt still ends with a
+strict-JSON output instruction, this is just a second line of defense.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
-no redeploy needed) — pick any Gemini or Gemma [model
+no redeploy needed) — pick any Gemini [model
 id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
-through that same OpenAI-compatible endpoint, not just the Gemma 3 27B
-default. Agent 8 (Prospector) is the one exception to "just an LLM call":
+through that same OpenAI-compatible endpoint, not just the Gemini 2.5
+Flash default. Agent 8 (Prospector) is the one exception to "just an LLM call":
 since Google's OpenAI-compatible endpoint has no hosted web search tool
 (unlike Claude), a **Build Search Query** Code node and a **Serper: Web
 Search** HTTP node run before its "Call LLM" node, and the LLM's user

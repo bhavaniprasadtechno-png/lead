@@ -1,5 +1,5 @@
 {
-  "name": "Agent 5 — Meeting Scheduler",
+  "name": "Agent 5 \u2014 Meeting Scheduler",
   "nodes": [
     {
       "id": "trigger",
@@ -132,6 +132,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -147,7 +151,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
       }
     },
     {
@@ -205,7 +209,7 @@
         1760,
         0
       ],
-      "notes": "In production, prefer a Cal.com/Google Calendar 'booking confirmed' webhook to fire this instead of firing immediately after the invite email — this models the simpler 'propose a link' flow from the spec.",
+      "notes": "In production, prefer a Cal.com/Google Calendar 'booking confirmed' webhook to fire this instead of firing immediately after the invite email \u2014 this models the simpler 'propose a link' flow from the spec.",
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",

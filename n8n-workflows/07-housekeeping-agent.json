@@ -1,5 +1,5 @@
 {
-  "name": "Agent 7 — Data Sync / Housekeeping",
+  "name": "Agent 7 \u2014 Data Sync / Housekeeping",
   "nodes": [
     {
       "id": "trigger",
@@ -140,6 +140,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (housekeeping)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET /analytics/overview').first().json)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -155,7 +159,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: parsed }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: parsed }];"
       }
     }
   ],

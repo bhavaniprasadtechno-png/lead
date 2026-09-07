@@ -1,5 +1,5 @@
 {
-  "name": "Agent 6 — Sequence / Drip Orchestrator",
+  "name": "Agent 6 \u2014 Sequence / Drip Orchestrator",
   "nodes": [
     {
       "id": "trigger",
@@ -154,6 +154,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (orchestrator)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('Split Out Enrollments').item.json)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -169,7 +173,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nconst enrollment = $('Split Out Enrollments').item.json;\nconst step = enrollment.sequence.steps.find(s => s.order === enrollment.currentStep) || enrollment.sequence.steps[0];\nreturn [{ json: { ...parsed, leadId: enrollment.lead.id, orgId: enrollment.sequence.campaign.orgId, enrollmentId: enrollment.id, templateId: step ? step.templateId : null } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst enrollment = $('Split Out Enrollments').item.json;\nconst step = enrollment.sequence.steps.find(s => s.order === enrollment.currentStep) || enrollment.sequence.steps[0];\nreturn [{ json: { ...parsed, leadId: enrollment.lead.id, orgId: enrollment.sequence.campaign.orgId, enrollmentId: enrollment.id, templateId: step ? step.templateId : null } }];"
       }
     },
     {

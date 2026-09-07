@@ -1,5 +1,5 @@
 {
-  "name": "Agent 3 — Email Personalization & Sender",
+  "name": "Agent 3 \u2014 Email Personalization & Sender",
   "nodes": [
     {
       "id": "trigger",
@@ -220,6 +220,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (writer)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ lead: $('GET Lead').first().json.lead, template: $('GET Template').first().json.template })}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -235,7 +239,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, enrollmentId: $('Verify Signature').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, enrollmentId: $('Verify Signature').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
       }
     },
     {
