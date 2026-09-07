@@ -233,9 +233,9 @@
         1440,
         0
       ],
-      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format).",
+      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). OpenRouter sometimes proxies an upstream provider error (e.g. Nvidia overloaded) back as a 200 response body with an `error` field instead of `choices` — handled below so that shows up as a real message, not a JSON.parse crash.",
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices?.[0]?.message?.content;\nlet candidates = [];\nlet errorMessage = null;\ntry {\n  const parsed = JSON.parse(text);\n  candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n} catch (e) {\n  errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
+        "jsCode": "const response = $input.first().json;\nlet candidates = [];\nlet errorMessage = null;\nif (response.error) {\n  errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n} else {\n  const text = response.choices?.[0]?.message?.content;\n  if (!text) {\n    errorMessage = 'LLM returned no content (empty response)';\n  } else {\n    try {\n      const parsed = JSON.parse(text);\n      candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n    } catch (e) {\n      errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n    }\n  }\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
       }
     },
     {
