@@ -38,7 +38,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 |---|---|---|
 | `N8N_WEBHOOK_SECRET` | A secret **you generate** — e.g. `openssl rand -base64 32`. This is not provided by n8n; it's a shared password you invent and set in **both** n8n and the app's `N8N_WEBHOOK_SECRET` env var, byte-for-byte identical. | every workflow (signing/verifying every request) |
 | `APP_BASE_URL` | Your deployed app's public URL, e.g. `https://leadpilot-web.onrender.com` (no trailing slash) | every workflow that calls the app's API |
-| `OPENROUTER_API_KEY` | Your [OpenRouter](https://openrouter.ai) API key (`sk-or-v1-...`) — sent as `Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}` on every "Call LLM" node. Not an n8n credential — just a Variable, same pattern as everything else on this page. | every workflow's LLM call |
+| `GOOGLE_AI_API_KEY` | Your [Google AI Studio](https://aistudio.google.com/apikey) API key — sent as `Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}` on every "Call LLM" node, against Google's OpenAI-compatible endpoint. Not an n8n credential — just a Variable, same pattern as everything else on this page. | every workflow's LLM call |
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
@@ -55,21 +55,21 @@ workflow JSON):
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
 
-Every LLM call goes through OpenRouter's OpenAI-compatible
+Every LLM call goes through Google AI Studio's OpenAI-compatible
 `/chat/completions` API instead of a dedicated n8n credential type —
 see **The LLM call shape** below.
 
-### The LLM call shape (OpenRouter, OpenAI-compatible)
+### The LLM call shape (Google AI Studio, OpenAI-compatible)
 
 Every "Call LLM" node in these workflows is the same shape:
 
 ```
-POST https://openrouter.ai/api/v1/chat/completions
-Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}
+POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}
 content-type: application/json
 
 {
-  "model": "<agent.model from the app, e.g. nvidia/nemotron-3-ultra-550b-a55b:free>",
+  "model": "<agent.model from the app, e.g. gemma-3-27b-it>",
   "max_tokens": <N>,
   "messages": [
     { "role": "system", "content": "<agent.systemPrompt from the app>" },
@@ -78,24 +78,31 @@ content-type: application/json
 }
 ```
 
-This differs from Anthropic's Messages API in two ways worth knowing if
-you swap models again later: the system prompt is a `role: "system"`
-message inside the `messages` array (not a separate top-level `system`
-field), and the model's answer comes back as a plain string at
-`response.choices[0].message.content` (not a `content` block array). The
-"Parse ... JSON" Code node right after each LLM call reads that path and
-`JSON.parse()`s it — every agent's system prompt ends with a strict-JSON
-output instruction so this always has something parseable to read.
+Google AI Studio (the Gemini API) exposes an OpenAI-compatible endpoint
+that accepts this exact request shape and returns this exact response
+shape, which is why swapping providers here only meant changing each "Call
+LLM" node's `url` and `Authorization` header — nothing about the body or
+the parsing logic changed. This differs from Anthropic's Messages API in
+two ways worth knowing if you swap models again later: the system prompt
+is a `role: "system"` message inside the `messages` array (not a separate
+top-level `system` field), and the model's answer comes back as a plain
+string at `response.choices[0].message.content` (not a `content` block
+array). The "Parse ... JSON" Code node right after each LLM call reads
+that path and `JSON.parse()`s it — every agent's system prompt ends with a
+strict-JSON output instruction so this always has something parseable to
+read.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
-no redeploy needed) — pick any [OpenRouter model slug](https://openrouter.ai/models),
-not just the NVIDIA Nemotron default. Agent 8 (Prospector) is the one
-exception to "just an LLM call": since OpenRouter/Nemotron has no hosted
-web search tool (unlike Claude), a **Build Search Query** Code node and a
-**Serper: Web Search** HTTP node run before its "Call LLM" node, and the
-LLM's user message includes those real search results (title/link/snippet)
-alongside the ICP — see `08-icp-lead-prospector.json` and the "AI-driven
-lead discovery" section below.
+no redeploy needed) — pick any Gemini or Gemma [model
+id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
+through that same OpenAI-compatible endpoint, not just the Gemma 3 27B
+default. Agent 8 (Prospector) is the one exception to "just an LLM call":
+since Google's OpenAI-compatible endpoint has no hosted web search tool
+(unlike Claude), a **Build Search Query** Code node and a **Serper: Web
+Search** HTTP node run before its "Call LLM" node, and the LLM's user
+message includes those real search results (title/link/snippet) alongside
+the ICP — see `08-icp-lead-prospector.json` and the "AI-driven lead
+discovery" section below.
 
 ## The webhook contract (both directions)
 

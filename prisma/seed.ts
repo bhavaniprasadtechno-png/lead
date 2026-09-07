@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { DEFAULT_AGENT_PROMPTS } from "../src/lib/constants";
+import { DEFAULT_AGENT_PROMPTS, DEFAULT_AGENT_MODEL } from "../src/lib/constants";
 
 const prisma = new PrismaClient();
 
@@ -40,7 +40,7 @@ async function main() {
           name: def.name,
           type: def.type as any,
           systemPrompt: def.prompt,
-          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+          model: DEFAULT_AGENT_MODEL,
           isActive: true,
         },
       }));

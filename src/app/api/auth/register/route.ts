@@ -2,7 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSessionToken, setSessionCookie } from "@/lib/auth";
 import { json, errorResponse } from "@/lib/api";
-import { DEFAULT_AGENT_PROMPTS } from "@/lib/constants";
+import { DEFAULT_AGENT_PROMPTS, DEFAULT_AGENT_MODEL } from "@/lib/constants";
 
 const schema = z.object({
   orgName: z.string().min(2).max(200),
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
           name: def.name,
           type: def.type as any,
           systemPrompt: def.prompt,
-          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+          model: DEFAULT_AGENT_MODEL,
           isActive: true,
         },
       });

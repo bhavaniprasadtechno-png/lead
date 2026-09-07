@@ -1,7 +1,7 @@
 # LeadPilot — AI-Powered Lead Generation & Management Platform
 
-Captures leads from multiple channels, uses AI (via OpenRouter — currently
-NVIDIA Nemotron 3 Ultra) to enrich, score, and qualify them, and runs
+Captures leads from multiple channels, uses AI (via Google AI Studio —
+currently Gemma 3) to enrich, score, and qualify them, and runs
 autonomous n8n "agents" to nurture leads via
 personalized email sequences until they convert or disqualify — with
 humans stepping in only at high-value decision points (meeting booked,
@@ -14,7 +14,7 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 
 ```
 ┌─────────────┐      REST/Webhooks      ┌──────────────┐      API calls      ┌─────────────┐
-│   Web App    │◄───────────────────────►│     n8n      │◄───────────────────►│  OpenRouter  │
+│   Web App    │◄───────────────────────►│     n8n      │◄───────────────────►│ Google AI    │
 │ (Next.js)    │                          │ (Agent Layer)│                     │  / Email /   │
 │  + Postgres  │                          │              │                     │  Enrichment  │
 └─────────────┘                          └──────────────┘                     └─────────────┘
@@ -48,10 +48,11 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 | 7 | Data Sync / Housekeeping | cron (nightly) | Summarizes bounces/unsubscribes/funnel into a JSON digest |
 | 8 | ICP Lead Prospector | `icp.discover` webhook (user clicks "Run Search Now") | Finds candidates matching a user-defined ICP → reports back → verifiable candidates become leads |
 
-Every "the LLM" above is called through **OpenRouter**
-(`https://openrouter.ai/api/v1/chat/completions`, OpenAI-compatible), not
-Anthropic directly — see `n8n-workflows/README.md` for the exact request
-shape and the `OPENROUTER_API_KEY` Variable every workflow needs.
+Every "the LLM" above is called through **Google AI Studio**
+(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`,
+OpenAI-compatible), not Anthropic directly — see `n8n-workflows/README.md`
+for the exact request shape and the `GOOGLE_AI_API_KEY` Variable every
+workflow needs.
 
 ### AI-driven lead discovery (ICP Search)
 
@@ -60,7 +61,7 @@ range, job titles, geographies, tech stack, and other buying-intent
 keywords — on the **ICP Search** page, then click **Run Search Now**.
 
 Agent 8 was originally designed around Claude's hosted web search tool,
-which has no OpenRouter/Nemotron equivalent (server-side tools are
+which has no Google AI Studio/Gemma equivalent (server-side tools are
 provider-specific). It now searches via **Serper** instead: a
 **Build Search Query** step turns the ICP's job titles/industries/
 geographies/keywords into a `site:linkedin.com/in` search, a
@@ -174,7 +175,7 @@ Visit http://localhost:3000.
 Import the workflows in `n8n-workflows/` into your n8n instance (see
 `n8n-workflows/README.md` for the exact steps, required credentials, and
 the full webhook contract table), set `APP_BASE_URL`, `N8N_WEBHOOK_SECRET`,
-and `OPENROUTER_API_KEY` as n8n Variables, and connect your Apollo/Clearbit,
+and `GOOGLE_AI_API_KEY` as n8n Variables, and connect your Apollo/Clearbit,
 Postmark/SES, Gmail, and Cal.com credentials in n8n's credential store.
 
 ### 6. Deploy (Render)

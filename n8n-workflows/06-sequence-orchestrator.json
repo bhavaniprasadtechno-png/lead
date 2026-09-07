@@ -126,7 +126,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -136,7 +136,7 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{$vars.OPENROUTER_API_KEY}}"
+              "value": "=Bearer {{$vars.GOOGLE_AI_API_KEY}}"
             }
           ]
         },
