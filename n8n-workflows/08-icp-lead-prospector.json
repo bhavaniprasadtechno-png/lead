@@ -37,7 +37,7 @@
       "typeVersion": 2,
       "position": [
         440,
-        -120
+        -160
       ],
       "parameters": {
         "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$json, timestamp, signature } }];"
@@ -50,21 +50,21 @@
       "typeVersion": 4.2,
       "position": [
         660,
-        -120
+        -160
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/prospector?orgId={{$json.orgId}}",
+        "url": "={{ $vars.APP_BASE_URL }}/api/agents/by-type/prospector?orgId={{ $json.orgId }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-signature",
-              "value": "={{$json.signature}}"
+              "value": "={{ $json.signature }}"
             },
             {
               "name": "x-timestamp",
-              "value": "={{$json.timestamp}}"
+              "value": "={{ $json.timestamp }}"
             }
           ]
         }
@@ -77,7 +77,7 @@
       "typeVersion": 2,
       "position": [
         440,
-        120
+        160
       ],
       "parameters": {
         "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
@@ -90,24 +90,94 @@
       "typeVersion": 4.2,
       "position": [
         660,
-        120
+        160
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{$vars.APP_BASE_URL}}/api/icp-profiles/{{$json.icpId}}",
+        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-signature",
-              "value": "={{$json.signature}}"
+              "value": "={{ $json.signature }}"
             },
             {
               "name": "x-timestamp",
-              "value": "={{$json.timestamp}}"
+              "value": "={{ $json.timestamp }}"
             }
           ]
         }
+      }
+    },
+    {
+      "id": "combinePromptIcp",
+      "name": "Combine Prompt & ICP",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "buildSearchQuery",
+      "name": "Build Search Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst titlePart = titles.length ? '(' + titles.map((t) => '\"' + t + '\"').join(' OR ') + ')' : '';\nconst parts = ['site:linkedin.com/in', titlePart, industries.join(' '), geographies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
+      }
+    },
+    {
+      "id": "serperSearch",
+      "name": "Serper: Web Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        200
+      ],
+      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the SERPER_API_KEY n8n Variable (https://serper.dev).",
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $vars.SERPER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "num",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {
@@ -116,10 +186,9 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1220,
         0
       ],
-      "notes": "KNOWN GAP: this used to use Claude's hosted web_search tool for live research in one call — OpenRouter/NVIDIA Nemotron has no equivalent server-side search tool, so this node currently just asks the model to answer from its own training data, which is stale and NOT grounded in real, verifiable sources. The prospector system prompt still forbids fabricating candidates, so expect it to return few or no candidates honestly rather than invent them. To restore real prospecting, add a search step before this node (e.g. call Tavily/Serper/Bing's API, feed the results into the user message here) and switch the model to one that supports tool-calling if you want a multi-turn research loop instead of a single search.",
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
@@ -132,7 +201,7 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{$vars.OPENROUTER_API_KEY}}"
+              "value": "=Bearer {{ $vars.OPENROUTER_API_KEY }}"
             }
           ]
         },
@@ -141,7 +210,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (prospector)').first().json.agent.model}}"
+              "value": "={{ $('GET Agent Prompt (prospector)').first().json.agent.model }}"
             },
             {
               "name": "max_tokens",
@@ -149,7 +218,7 @@
             },
             {
               "name": "messages",
-              "value": "={{[{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET ICP Profile').first().json.icpProfile)}]}}"
+              "value": "={{ [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Serper: Web Search').first().json.organic || []).map(r => ({ title: r.title, link: r.link, snippet: r.snippet })) })}] }}"
             }
           ]
         }
@@ -161,7 +230,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1440,
         0
       ],
       "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format).",
@@ -175,7 +244,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
+        1660,
         0
       ],
       "parameters": {
@@ -188,22 +257,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
+        1880,
         0
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{$vars.APP_BASE_URL}}/api/icp-profiles/{{$json.icpId}}/runs/{{$json.runId}}/results",
+        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}/runs/{{ $json.runId }}/results",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-signature",
-              "value": "={{$json.signature}}"
+              "value": "={{ $json.signature }}"
             },
             {
               "name": "x-timestamp",
-              "value": "={{$json.timestamp}}"
+              "value": "={{ $json.timestamp }}"
             },
             {
               "name": "content-type",
@@ -213,7 +282,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{$json.rawBody}}"
+        "jsonBody": "={{ $json.rawBody }}"
       }
     },
     {
@@ -222,7 +291,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
+        2100,
         0
       ],
       "parameters": {
@@ -235,22 +304,22 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1980,
+        2320,
         0
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{$vars.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
+        "url": "={{ $vars.APP_BASE_URL }}/api/agents/{{ $json.agentId }}/runs",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "x-signature",
-              "value": "={{$json.signature}}"
+              "value": "={{ $json.signature }}"
             },
             {
               "name": "x-timestamp",
-              "value": "={{$json.timestamp}}"
+              "value": "={{ $json.timestamp }}"
             },
             {
               "name": "content-type",
@@ -260,7 +329,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{$json.rawBody}}"
+        "jsonBody": "={{ $json.rawBody }}"
       }
     }
   ],
@@ -318,7 +387,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Web Search)",
+            "node": "Combine Prompt & ICP",
             "type": "main",
             "index": 0
           }
@@ -326,6 +395,39 @@
       ]
     },
     "GET ICP Profile": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt & ICP",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Prompt & ICP": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query": {
+      "main": [
+        [
+          {
+            "node": "Serper: Web Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serper: Web Search": {
       "main": [
         [
           {
