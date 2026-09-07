@@ -157,22 +157,6 @@
       "parameters": {
         "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: parsed }];"
       }
-    },
-    {
-      "id": "postSlack",
-      "name": "Slack: Post Daily Summary",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.2,
-      "position": [
-        1100,
-        0
-      ],
-      "notes": "Configure a Slack credential + channel for the daily digest.",
-      "parameters": {
-        "resource": "message",
-        "operation": "post",
-        "text": "={{$json.summary}}"
-      }
     }
   ],
   "connections": {
@@ -241,17 +225,6 @@
         [
           {
             "node": "Parse Summary JSON",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Summary JSON": {
-      "main": [
-        [
-          {
-            "node": "Slack: Post Daily Summary",
             "type": "main",
             "index": 0
           }

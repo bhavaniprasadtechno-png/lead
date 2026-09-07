@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, createSessionToken, setSessionCookie } from "@/lib/auth";
 import { json, errorResponse } from "@/lib/api";
+import { DEFAULT_AGENT_PROMPTS } from "@/lib/constants";
 
 const schema = z.object({
   orgName: z.string().min(2).max(200),
@@ -35,6 +36,23 @@ export async function POST(req: Request) {
         role: "owner",
       },
     });
+
+    // Every n8n agent workflow's first step is GET /api/agents/by-type/:type,
+    // which 404s with no active agent of that type — seed one per type so
+    // the full pipeline works immediately, no manual setup required.
+    for (const def of Object.values(DEFAULT_AGENT_PROMPTS)) {
+      await tx.agent.create({
+        data: {
+          orgId: org.id,
+          name: def.name,
+          type: def.type as any,
+          systemPrompt: def.prompt,
+          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+          isActive: true,
+        },
+      });
+    }
+
     return { user, org };
   });
 

@@ -45,7 +45,7 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 | 4 | Reply Intent Classifier | Gmail/Graph trigger | Matches thread → lead, classifies intent, routes (interested/objection/lost/etc.) |
 | 5 | Meeting Scheduler | chained from Agent 4 | Proposes a booking link, updates lead to `meeting_booked` |
 | 6 | Sequence / Drip Orchestrator | cron (30 min) | Polls due sequence steps, decides whether to advance, triggers Agent 3 |
-| 7 | Data Sync / Housekeeping | cron (nightly) | Summarizes bounces/unsubscribes/funnel into a Slack digest |
+| 7 | Data Sync / Housekeeping | cron (nightly) | Summarizes bounces/unsubscribes/funnel into a JSON digest |
 | 8 | ICP Lead Prospector | `icp.discover` webhook (user clicks "Run Search Now") | Finds candidates matching a user-defined ICP → reports back → verifiable candidates become leads |
 
 Every "the LLM" above is called through **OpenRouter**
