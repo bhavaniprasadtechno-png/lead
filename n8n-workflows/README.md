@@ -42,6 +42,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
+| `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as `X-API-KEY` to `google.serper.dev/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data | Agent 8 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
 Variables — these are actual API keys, kept out of both `$vars` and the
@@ -88,11 +89,13 @@ output instruction so this always has something parseable to read.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
 no redeploy needed) — pick any [OpenRouter model slug](https://openrouter.ai/models),
-not just the NVIDIA Nemotron default. Note Agent 8 (Prospector) needs a
-model that's actually good at following a strict-JSON instruction with no
-grounding data, since (unlike Claude) it has no hosted web search tool —
-see the note in `08-icp-lead-prospector.json` and the README's "AI-driven
-lead discovery" section.
+not just the NVIDIA Nemotron default. Agent 8 (Prospector) is the one
+exception to "just an LLM call": since OpenRouter/Nemotron has no hosted
+web search tool (unlike Claude), a **Build Search Query** Code node and a
+**Serper: Web Search** HTTP node run before its "Call LLM" node, and the
+LLM's user message includes those real search results (title/link/snippet)
+alongside the ICP — see `08-icp-lead-prospector.json` and the "AI-driven
+lead discovery" section below.
 
 ## The webhook contract (both directions)
 
@@ -180,7 +183,8 @@ Active for the app's automatic calls to reach it.
   email become `Lead` rows (`source = ai_discovery`); every candidate it
   returns — with or without an email — is still stored on the
   `LeadDiscoveryRun.candidates` field for review, so nothing found is
-  silently dropped, just not all of it becomes an actionable lead. As
-  shipped it has no live search access (see the note above), so in
-  practice it will honestly return an empty list until you wire a search
-  API into the workflow.
+  silently dropped, just not all of it becomes an actionable lead. It
+  grounds candidates in real Serper search results (see the note above);
+  a `site:linkedin.com/in` query built from the ICP still won't surface an
+  email on most profile pages, so expect a mix of candidates with and
+  without one — the prompt still refuses to guess an email pattern.

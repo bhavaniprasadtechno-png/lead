@@ -59,14 +59,15 @@ Define an **Ideal Customer Profile** — target industries, company size
 range, job titles, geographies, tech stack, and other buying-intent
 keywords — on the **ICP Search** page, then click **Run Search Now**.
 
-> **Known gap:** Agent 8 was designed around Claude's hosted web search
-> tool, which has no OpenRouter/Nemotron equivalent — server-side tools
-> are provider-specific. As shipped, Agent 8's model has no live search
-> access, so it correctly returns an empty candidate list rather than
-> fabricate one (its prompt explicitly forbids answering from training
-> data). To restore real prospecting, wire a search API (Tavily, Serper,
-> Bing) into the workflow ahead of the LLM call — see the node's `notes`
-> in `n8n-workflows/08-icp-lead-prospector.json`.
+Agent 8 was originally designed around Claude's hosted web search tool,
+which has no OpenRouter/Nemotron equivalent (server-side tools are
+provider-specific). It now searches via **Serper** instead: a
+**Build Search Query** step turns the ICP's job titles/industries/
+geographies/keywords into a `site:linkedin.com/in` search, a
+**Serper: Web Search** step runs it, and the LLM extracts/structures
+candidates only from those real results (its prompt still forbids
+answering from training data alone). Requires a `SERPER_API_KEY` n8n
+Variable — see `n8n-workflows/README.md`.
 
 Candidates found (once search is wired back in) are grounded in a real,
 cited source — never an invented person, company, or email. Only
