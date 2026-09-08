@@ -192,7 +192,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Tavily: Web Search').first().json.results || []).map(r => ({ title: r.title, link: r.url, snippet: r.content })) })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Tavily: Web Search').first().json.results || []).map(r => ({ title: r.title, link: r.url, snippet: r.content })) })}] }; return body; })()) }}"
       },
       "retryOnFail": true,
       "maxTries": 3,

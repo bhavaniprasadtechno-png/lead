@@ -120,7 +120,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (scheduler)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: isGemma ? Math.max(256, 4096) : 256, messages: [{role:'system', content: $('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (scheduler)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: isGemma ? Math.max(256, 4096) : 256, messages: [{role:'system', content: $('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}] }; return body; })()) }}"
       },
       "retryOnFail": true,
       "maxTries": 3,

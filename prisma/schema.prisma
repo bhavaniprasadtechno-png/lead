@@ -375,7 +375,7 @@ model Agent {
   // /chat/completions endpoint — see n8n-workflows/README.md for the request
   // shape every agent uses. Keep in sync with DEFAULT_AGENT_MODEL in
   // src/lib/constants.ts (Prisma schema can't import a JS constant).
-  model        String    @default("gemma-4-31b-it")
+  model        String    @default("gemini-3.5-flash-lite")
   isActive     Boolean   @default(true) @map("is_active")
   config       Json?
   createdAt    DateTime  @default(now()) @map("created_at")
