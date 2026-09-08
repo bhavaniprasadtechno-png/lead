@@ -357,6 +357,20 @@
       }
     },
     {
+      "id": "normalize-split-candidate",
+      "name": "Normalize Split Candidate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        -150
+      ],
+      "notes": "Split Out (previous node) nests each split element under its original field name (candidates) instead of flattening it, so { firstName, company, ... } arrives here as { candidates: { firstName, company, ... } }. That silently broke IF: Has Company (checking a field that no longer existed at top level) and corrupted the final payload sent to the app (422 Required). This unwraps it back to a flat candidate object.",
+      "parameters": {
+        "jsCode": "const item = $json;\nconst candidate = (item && typeof item === 'object' && item.candidates && typeof item.candidates === 'object' && !Array.isArray(item.candidates)) ? item.candidates : item;\nreturn [{ json: candidate }];"
+      }
+    },
+    {
       "id": "ifHasCompany",
       "name": "IF: Has Company",
       "type": "n8n-nodes-base.if",
@@ -668,6 +682,17 @@
       ]
     },
     "Split Out Candidates": {
+      "main": [
+        [
+          {
+            "node": "Normalize Split Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Split Candidate": {
       "main": [
         [
           {

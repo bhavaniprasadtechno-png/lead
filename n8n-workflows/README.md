@@ -278,13 +278,32 @@ Active for the app's automatic calls to reach it.
   wasn't confident enough to use it without a pre-extracted company to
   point to.
 
+  **Split Out silently nests its output — always normalize after it.**
+  Once real candidates started coming back, reporting them to the app
+  failed with a `422: Required` from `POST
+  /icp-profiles/:id/runs/:runId/results`. n8n's **Split Out Candidates**
+  node (`fieldToSplitOut: "candidates"`) doesn't flatten each array
+  element to the item's top level — it keeps the element nested under its
+  original field name, so a flat `{ firstName, company, ... }` candidate
+  becomes `{ candidates: { firstName, company, ... } }` for the rest of
+  the branch. That corrupted the final payload (each candidate double-
+  wrapped) *and* silently broke **IF: Has Company** — it checks
+  `$json.company`, which no longer existed at the top level, so it always
+  took the "no company" branch and **Hunter: Email Finder** never actually
+  ran on any candidate that had a company, defeating its whole purpose. A
+  new **Normalize Split Candidate** node right after Split Out unwraps
+  this back to a flat object before anything else touches it. Verified
+  live: Hunter now actually fires and returns real, verified emails (not
+  just candidates with no company skipping it) and the final report to
+  the app succeeds.
+
   Most matched pages still won't surface an email directly, so after the
-  LLM extracts candidates, a **Hunter: Email Finder** step looks up a real
-  email per candidate by company + name (skipped when the candidate has
-  no company to search against) and only accepts Hunter's own
-  high-confidence result (score ≥ 50). Candidates with no company, or
-  where Hunter can't find a confident match, are still imported as leads
-  — they just show "No email on file" in the app and skip the auto-send
-  step in Agent 3 (`IF: Has Email` gates drafting/sending on a real
-  address being present) until someone manually adds contact info.
-  Requires the `HUNTER_API_KEY` n8n Variable above.
+  LLM extracts candidates, **Hunter: Email Finder** looks up a real email
+  per candidate by company + name (skipped when the candidate has no
+  company to search against) and only accepts Hunter's own high-
+  confidence result (score ≥ 50). Candidates with no company, or where
+  Hunter can't find a confident match, are still imported as leads — they
+  just show "No email on file" in the app and skip the auto-send step in
+  Agent 3 (`IF: Has Email` gates drafting/sending on a real address being
+  present) until someone manually adds contact info. Requires the
+  `HUNTER_API_KEY` n8n Variable above.
