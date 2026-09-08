@@ -206,27 +206,12 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "={{ (() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
-            },
-            {
-              "name": "max_tokens",
-              "value": "4096"
-            },
-            {
-              "name": "messages",
-              "value": "={{ [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Serper: Web Search').first().json.organic || []).map(r => ({ title: r.title, link: r.link, snippet: r.snippet })) })}] }}"
-            },
-            {
-              "name": "reasoning_effort",
-              "value": "none"
-            }
-          ]
-        }
-      }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Serper: Web Search').first().json.organic || []).map(r => ({ title: r.title, link: r.link, snippet: r.snippet })) })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "id": "parseCandidates",
@@ -239,7 +224,7 @@
       ],
       "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). OpenRouter sometimes proxies an upstream provider error (e.g. Nvidia overloaded) back as a 200 response body with an `error` field instead of `choices` — handled below so that shows up as a real message, not a JSON.parse crash.",
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nlet candidates = [];\nlet errorMessage = null;\nif (response.error) {\n  errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n} else {\n  const text = response.choices?.[0]?.message?.content;\n  if (!text) {\n    errorMessage = 'LLM returned no content (empty response)';\n  } else {\n    try {\n      const cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\n      const parsed = JSON.parse(cleaned);\n      candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n    } catch (e) {\n      errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n    }\n  }\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
+        "jsCode": "const response = $input.first().json;\nlet candidates = [];\nlet errorMessage = null;\nif (response.error) {\n  errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n} else {\n  const text = response.choices?.[0]?.message?.content;\n  if (!text) {\n    errorMessage = 'LLM returned no content (empty response)';\n  } else {\n    try {\n      const withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\n      const cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\n      const parsed = JSON.parse(cleaned);\n      candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n    } catch (e) {\n      errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n    }\n  }\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
       }
     },
     {
@@ -311,6 +296,10 @@
         4000,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "={{ $vars.APP_BASE_URL }}/api/agents/{{ $json.agentId }}/runs",

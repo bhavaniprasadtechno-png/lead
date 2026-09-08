@@ -1,7 +1,7 @@
 # LeadPilot — AI-Powered Lead Generation & Management Platform
 
 Captures leads from multiple channels, uses AI (via Google AI Studio —
-currently Gemini 2.5 Flash) to enrich, score, and qualify them, and runs
+currently Gemma 4 31B) to enrich, score, and qualify them, and runs
 autonomous n8n "agents" to nurture leads via
 personalized email sequences until they convert or disqualify — with
 humans stepping in only at high-value decision points (meeting booked,
