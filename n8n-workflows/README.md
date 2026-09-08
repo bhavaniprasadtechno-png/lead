@@ -220,6 +220,38 @@ Active for the app's automatic calls to reach it.
   open them in the n8n editor and wire in your real Apollo/Postmark/Gmail/
   Cal.com credentials — placeholder HTTP Request nodes are included with
   the correct URLs and payload shapes but generic auth.
+- **Agent 1's Apollo lookup has no real credential by default, and that's
+  handled, not a bug to fix before things work.** Without a real
+  Apollo/Clearbit credential, `Apollo: Company/Contact Lookup` gets back
+  `{"error": "Api key required"}` — `neverError` on that node stops that
+  from killing the run, and `Normalize Enrichment (LLM)` detects the
+  response isn't real Apollo data (no `person`/`organization` field) and
+  sends the LLM an empty object instead, which its existing prompt already
+  handles correctly ("only pass through fields present in the source
+  payload" → all nulls). The lead still gets PATCHed and still moves on to
+  scoring. Wire in a real Apollo/Clearbit credential to get actual
+  firmographic data instead of nulls.
+- **A lead's score was never actually being written, in any setup.**
+  Agent 2 PATCHes a lead's score to `/api/leads/:id` using the same
+  HMAC-signature auth every other n8n→app call uses — but that route only
+  checked `requireOrgSession()` (a login cookie), so every one of those
+  PATCHes 401'd silently before this was fixed. This was an app bug, not a
+  workflow one (`PATCH /api/leads/:id` only branched on a session cookie,
+  unlike `GET /api/leads/:id` in the same file which already supported
+  both a session and an HMAC signature) — fixed in `src/app/api/leads/[id]/
+  route.ts` to accept either, matching the rest of the API. This required
+  an app-code change and redeploy to actually take effect, not just an n8n
+  edit.
+- **`Sign: Log Run` in Agents 1 and 2 was reading fields from the wrong
+  node.** Both call a PATCH first (enrichment / score) and *then* build the
+  `POST /agents/:id/runs` audit-log payload from `$json` — but by that
+  point `$json` is the PATCH response body, which doesn't carry `leadId`
+  or `agentId`. The URL ended up as `.../api/agents//runs` (empty agent
+  id) → `405`. This didn't block enrichment or scoring (the important
+  PATCH already happened earlier in the chain), but it made every
+  execution show red and broke the `agent_runs` audit trail. Fixed by
+  reading `leadId`/`agentId` from the earlier `Parse LLM JSON` / `Parse
+  Score JSON` node instead of `$json`.
 - Every workflow that sends outbound customer email (Agents 3 and 5) is
   built to enforce the daily-send-cap / feature-flag pattern from the spec:
   gate the "Send Email" node behind an `IF` node reading a `SEND_ENABLED`

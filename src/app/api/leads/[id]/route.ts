@@ -70,14 +70,32 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
+/**
+ * PATCH /api/leads/:id
+ * Reachable two ways, same as GET above: an authenticated rep editing a
+ * lead's own fields in the app, or an n8n agent workflow patching a score
+ * (the Scoring Agent) or other fields via HMAC signature. Without this dual
+ * path, agent-originated PATCHes (no session cookie) always 401 and a
+ * lead's score is never written.
+ */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await requireOrgSession();
-    const { id } = await params;
-    const existing = await prisma.lead.findFirst({ where: { id, orgId: session.orgId } });
-    if (!existing) throw new ApiError("Lead not found", 404);
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-signature");
+    let orgId: string | undefined;
+    if (signature) {
+      await requireN8nSignature(req, rawBody);
+    } else {
+      const session = await requireOrgSession();
+      orgId = session.orgId;
+    }
 
-    const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+    const { id } = await params;
+    const existing = await prisma.lead.findFirst({ where: { id, ...(orgId ? { orgId } : {}) } });
+    if (!existing) throw new ApiError("Lead not found", 404);
+    orgId = orgId ?? existing.orgId;
+
+    const parsed = patchSchema.safeParse(JSON.parse(rawBody || "{}"));
     if (!parsed.success) {
       return json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, 422);
     }
@@ -103,7 +121,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         data: {
           leadId: lead.id,
           type: "status_change",
-          actor: "human",
+          actor: signature ? "agent" : "human",
           payload: { from: existing.status, to: data.status },
         },
       });
@@ -122,11 +140,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       if (data.score >= QUALIFYING_SCORE_THRESHOLD && lead.status !== "qualified") {
         await prisma.lead.update({ where: { id }, data: { status: "qualified" } });
-        await triggerN8nWebhook("lead.qualified", { leadId: lead.id, orgId: session.orgId, score: data.score });
+        await triggerN8nWebhook("lead.qualified", { leadId: lead.id, orgId, score: data.score });
       }
     }
 
-    const fresh = await loadLead(session.orgId, id);
+    const fresh = await loadLead(orgId, id);
     return json({ lead: fresh });
   } catch (err) {
     return handleApiError(err);
