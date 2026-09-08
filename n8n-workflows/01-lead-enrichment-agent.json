@@ -120,7 +120,7 @@
         120
       ],
       "notesInFlow": true,
-      "notes": "Replace with your Apollo/Clearbit credential. Placeholder endpoint shown.",
+      "notes": "Placeholder endpoint - most orgs won't have a real Apollo/Clearbit credential configured. neverError is set so a missing-credential failure (e.g. \"Api key required\") doesn't kill the whole enrichment run: Normalize Enrichment (LLM) detects a non-data response and treats it as \"no third-party data available\" rather than crashing, so the lead still gets PATCHed (with null enrichment fields) and still proceeds to scoring. Replace with a real Apollo/Clearbit credential to get actual firmographic data.",
       "parameters": {
         "method": "POST",
         "url": "https://api.apollo.io/v1/people/match",
@@ -134,7 +134,14 @@
           ]
         },
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "apolloApi"
+        "nodeCredentialType": "apolloApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       }
     },
     {
@@ -164,7 +171,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (enricher)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: isGemma ? Math.max(1024, 4096) : 1024, messages: [{role:'system', content: $('GET Agent Prompt (enricher)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('Apollo: Company/Contact Lookup').first().json)}] }; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (enricher)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const isGemma = /^gemma/i.test(model); const apolloRaw = $('Apollo: Company/Contact Lookup').first().json || {}; const apolloData = (apolloRaw.person || apolloRaw.organization) ? apolloRaw : {}; const body = { model, max_tokens: isGemma ? Math.max(1024, 4096) : 1024, messages: [{role:'system', content: $('GET Agent Prompt (enricher)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify(apolloData)}] }; return body; })()) }}"
       },
       "retryOnFail": true,
       "maxTries": 3,
@@ -240,7 +247,7 @@
         60
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { leadId: $json.leadId, input: { leadId: $json.leadId }, output: $json, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse LLM JSON').first().json;\nconst body = { leadId: p.leadId, input: { leadId: p.leadId }, output: $json, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { agentId: p.agentId, rawBody, timestamp, signature } }];"
       }
     },
     {

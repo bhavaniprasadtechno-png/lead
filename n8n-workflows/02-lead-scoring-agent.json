@@ -214,7 +214,7 @@
         -60
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst body = { leadId: $json.leadId, input: { leadId: $json.leadId }, output: { score: $json.score, qualified: $json.qualified, reason: $json.reason }, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...$json, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Score JSON').first().json;\nconst body = { leadId: p.leadId, input: { leadId: p.leadId }, output: { score: p.score, qualified: p.qualified, reason: p.reason }, status: 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { agentId: p.agentId, rawBody, timestamp, signature } }];"
       }
     },
     {
