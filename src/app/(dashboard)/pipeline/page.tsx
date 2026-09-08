@@ -45,6 +45,12 @@ export default function PipelinePage() {
     });
   }
 
+  async function remove(leadId: string) {
+    if (!confirm("Delete this lead? This removes its activity, enrichment, and sequence history too.")) return;
+    setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    await fetch(`/api/leads/${leadId}`, { method: "DELETE" });
+  }
+
   return (
     <div>
       <PageHeader title="Pipeline" subtitle="Move leads through the funnel — advance a card to change its stage" />
@@ -62,9 +68,18 @@ export default function PipelinePage() {
                 <div className="space-y-2">
                   {stageLeads.map((lead) => (
                     <div key={lead.id} className="card p-3">
-                      <Link href={`/leads/${lead.id}`} className="font-medium text-sm hover:text-brand-600">
-                        {lead.firstName} {lead.lastName}
-                      </Link>
+                      <div className="flex items-center justify-between">
+                        <Link href={`/leads/${lead.id}`} className="font-medium text-sm hover:text-brand-600">
+                          {lead.firstName} {lead.lastName}
+                        </Link>
+                        <button
+                          className="text-xs text-slate-300 hover:text-red-600"
+                          title="Delete lead"
+                          onClick={() => remove(lead.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
                       <div className="text-xs text-slate-500 mt-0.5">{lead.company ?? "—"}</div>
                       <div className="flex items-center justify-between mt-2">
                         <ScoreBadge score={lead.score} />

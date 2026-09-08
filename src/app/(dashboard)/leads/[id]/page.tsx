@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { PageHeader, StatusBadge, ScoreBadge } from "@/components/ui";
 import { LeadStatusControl } from "@/components/LeadStatusControl";
+import { LeadEnrollControl } from "@/components/LeadEnrollControl";
+import { DeleteLeadButton } from "@/components/DeleteLeadButton";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,6 +19,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       activities: { orderBy: { createdAt: "desc" } },
       emailLogs: { orderBy: { sentAt: "desc" } },
       agentRuns: { orderBy: { createdAt: "desc" }, include: { agent: true } },
+      sequenceEnrollments: { include: { sequence: { include: { campaign: true } } }, orderBy: { createdAt: "desc" } },
     },
   });
 
@@ -27,7 +30,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       <PageHeader
         title={`${lead.firstName} ${lead.lastName ?? ""}`.trim()}
         subtitle={`${lead.jobTitle ?? "Unknown title"} at ${lead.company ?? "Unknown company"}`}
-        actions={<LeadStatusControl leadId={lead.id} status={lead.status} score={lead.score} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <LeadStatusControl leadId={lead.id} status={lead.status} score={lead.score} />
+            <LeadEnrollControl leadId={lead.id} />
+            <DeleteLeadButton leadId={lead.id} redirectTo="/leads" />
+          </div>
+        }
       />
       <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -127,6 +136,29 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <div className="space-y-6">
+          <div className="card p-6">
+            <h2 className="font-semibold mb-4">Sequences</h2>
+            <div className="space-y-3">
+              {lead.sequenceEnrollments.length === 0 && (
+                <p className="text-sm text-slate-400">Not enrolled in any sequence yet.</p>
+              )}
+              {lead.sequenceEnrollments.map((enrollment) => (
+                <div key={enrollment.id} className="text-sm border-b border-slate-100 pb-3 last:border-0">
+                  <div className="font-medium">
+                    {enrollment.sequence.campaign.name} — {enrollment.sequence.name}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {enrollment.completedAt
+                      ? "Completed"
+                      : enrollment.stoppedReason
+                        ? `Stopped: ${enrollment.stoppedReason}`
+                        : `Step ${enrollment.currentStep + 1}${enrollment.nextStepDueAt ? ` · next due ${new Date(enrollment.nextStepDueAt).toLocaleString()}` : ""}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="card p-6">
             <h2 className="font-semibold mb-4">Agent runs</h2>
             <div className="space-y-3">

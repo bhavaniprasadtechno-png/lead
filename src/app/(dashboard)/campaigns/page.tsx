@@ -12,6 +12,8 @@ interface Campaign {
   sequences: { id: string }[];
 }
 
+const STATUS_OPTIONS = ["draft", "active", "paused", "archived"];
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -25,6 +27,21 @@ export default function CampaignsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function setStatus(id: string, status: string) {
+    setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+    await fetch(`/api/campaigns/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Delete this campaign and all its sequences? This can't be undone.")) return;
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+  }
 
   return (
     <div>
@@ -43,14 +60,33 @@ export default function CampaignsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {campaigns.map((c) => (
-              <Link key={c.id} href={`/campaigns/${c.id}`} className="card p-5 block hover:border-brand-300">
+              <div key={c.id} className="card p-5">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">{c.name}</h3>
-                  <span className="badge bg-slate-100 text-slate-600">{c.status}</span>
+                  <Link href={`/campaigns/${c.id}`} className="font-semibold hover:text-brand-600">
+                    {c.name}
+                  </Link>
+                  <select
+                    className={`badge cursor-pointer border-0 ${
+                      c.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                    }`}
+                    value={c.status}
+                    onChange={(e) => setStatus(c.id, e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <p className="text-sm text-slate-500 mt-1">{c.goal ?? "No goal set"}</p>
-                <p className="text-xs text-slate-400 mt-2">{c.sequences.length} sequence(s)</p>
-              </Link>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-slate-400">{c.sequences.length} sequence(s)</p>
+                  <button className="text-xs text-red-600 font-medium hover:underline" onClick={() => remove(c.id)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

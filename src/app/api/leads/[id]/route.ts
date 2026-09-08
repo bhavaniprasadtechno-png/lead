@@ -4,6 +4,7 @@ import { requireOrgSession, handleApiError, json, ApiError } from "@/lib/api";
 import { triggerN8nWebhook } from "@/lib/n8n";
 import { requireN8nSignature } from "@/lib/webhook-auth";
 import { QUALIFYING_SCORE_THRESHOLD } from "@/lib/constants";
+import { autoEnrollQualifiedLead } from "@/lib/sequences";
 
 const patchSchema = z.object({
   status: z
@@ -125,6 +126,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           payload: { from: existing.status, to: data.status },
         },
       });
+
+      if (data.status === "qualified") {
+        await autoEnrollQualifiedLead(lead.id, orgId);
+      }
     }
 
     if (data.score !== undefined && data.score !== existing.score) {
@@ -141,11 +146,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (data.score >= QUALIFYING_SCORE_THRESHOLD && lead.status !== "qualified") {
         await prisma.lead.update({ where: { id }, data: { status: "qualified" } });
         await triggerN8nWebhook("lead.qualified", { leadId: lead.id, orgId, score: data.score });
+        await autoEnrollQualifiedLead(lead.id, orgId);
       }
     }
 
     const fresh = await loadLead(orgId, id);
     return json({ lead: fresh });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+/** DELETE /api/leads/:id — human-only (no n8n use case for deleting a lead). */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireOrgSession();
+    const { id } = await params;
+    const existing = await prisma.lead.findFirst({ where: { id, orgId: session.orgId } });
+    if (!existing) throw new ApiError("Lead not found", 404);
+    await prisma.lead.delete({ where: { id } });
+    return json({ ok: true });
   } catch (err) {
     return handleApiError(err);
   }
