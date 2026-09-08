@@ -64,8 +64,10 @@ Agent 8 was originally designed around Claude's hosted web search tool,
 which has no Google AI Studio equivalent (server-side tools are
 provider-specific). It now searches via **Serper** instead: a
 **Build Search Query** step turns the ICP's job titles/industries/
-geographies/keywords into a `site:linkedin.com/in` search, a
-**Serper: Web Search** step runs it, and the LLM extracts/structures
+geographies/technologies/keywords into a search query, a
+**Serper: Web Search** step runs it against Google's **complete web**
+index (company sites, news, directories, LinkedIn, etc. — not restricted
+to any one site) and pulls back 20 results, and the LLM extracts/structures
 candidates only from those real results (its prompt still forbids
 answering from training data alone). Requires a `SERPER_API_KEY` n8n
 Variable — see `n8n-workflows/README.md`.

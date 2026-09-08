@@ -135,7 +135,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst technologies = Array.isArray(icp.technologies) ? icp.technologies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst titlePart = titles.length ? '(' + titles.map((t) => '\"' + t + '\"').join(' OR ') + ')' : '';\nconst parts = ['site:linkedin.com/in', titlePart, industries.join(' '), geographies.join(' '), technologies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst technologies = Array.isArray(icp.technologies) ? icp.technologies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst titlePart = titles.length ? '(' + titles.map((t) => '\"' + t + '\"').join(' OR ') + ')' : '';\nconst parts = [titlePart, industries.join(' '), geographies.join(' '), technologies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
       }
     },
     {
@@ -173,7 +173,7 @@
             },
             {
               "name": "num",
-              "value": "10"
+              "value": "20"
             }
           ]
         },

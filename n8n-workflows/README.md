@@ -202,9 +202,10 @@ Active for the app's automatic calls to reach it.
   returns — with or without an email — is still stored on the
   `LeadDiscoveryRun.candidates` field for review, so nothing found is
   silently dropped, just not all of it becomes an actionable lead. It
-  grounds candidates in real Serper search results (see the note above);
-  a `site:linkedin.com/in` query built from the ICP still won't surface an
-  email on most profile pages, so after the LLM extracts candidates, a
+  grounds candidates in real Serper search results across the **complete
+  web** — not restricted to any one site — pulling 20 results per run (see
+  the note above); most of those pages still won't surface an email
+  directly, so after the LLM extracts candidates, a
   **Hunter: Email Finder** step looks up a real email per candidate by
   company + name (skipped when the candidate has no company to search
   against) and only accepts Hunter's own high-confidence result (score
