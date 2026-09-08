@@ -135,29 +135,25 @@
         0
       ],
       "parameters": {
-        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst technologies = Array.isArray(icp.technologies) ? icp.technologies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst titlePart = titles.length ? '(' + titles.map((t) => '\"' + t + '\"').join(' OR ') + ')' : '';\nconst parts = [titlePart, industries.join(' '), geographies.join(' '), technologies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst technologies = Array.isArray(icp.technologies) ? icp.technologies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst parts = [titles.join(' '), industries.join(' '), geographies.join(' '), technologies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
       }
     },
     {
       "id": "serperSearch",
-      "name": "Serper: Web Search",
+      "name": "Tavily: Web Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1000,
         200
       ],
-      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the SERPER_API_KEY n8n Variable (https://serper.dev).",
+      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the TAVILY_API_KEY n8n Variable (free tier: 1,000 searches/month, no card - https://tavily.com). Unlike Serper (Google's raw operator syntax), Tavily accepts plain natural-language queries with no site:/OR/parentheses restrictions.",
       "parameters": {
         "method": "POST",
-        "url": "https://google.serper.dev/search",
+        "url": "https://api.tavily.com/search",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "X-API-KEY",
-              "value": "={{ $vars.SERPER_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -165,19 +161,8 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "q",
-              "value": "={{ $json.query }}"
-            },
-            {
-              "name": "num",
-              "value": "20"
-            }
-          ]
-        },
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $vars.TAVILY_API_KEY, query: $json.query, max_results: 20, search_depth: 'basic' }) }}"
       }
     },
     {
@@ -207,7 +192,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Serper: Web Search').first().json.organic || []).map(r => ({ title: r.title, link: r.link, snippet: r.snippet })) })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Tavily: Web Search').first().json.results || []).map(r => ({ title: r.title, link: r.url, snippet: r.content })) })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
       },
       "retryOnFail": true,
       "maxTries": 3,
@@ -590,14 +575,14 @@
       "main": [
         [
           {
-            "node": "Serper: Web Search",
+            "node": "Tavily: Web Search",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Serper: Web Search": {
+    "Tavily: Web Search": {
       "main": [
         [
           {

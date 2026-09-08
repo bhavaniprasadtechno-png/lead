@@ -42,7 +42,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
-| `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as `X-API-KEY` to `google.serper.dev/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data | Agent 8 |
+| `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
@@ -133,7 +133,7 @@ no redeploy needed) — pick any Gemini or Gemma [model
 id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
 through that same OpenAI-compatible endpoint. Agent 8 (Prospector) is the one exception to "just an LLM call":
 since Google's OpenAI-compatible endpoint has no hosted web search tool
-(unlike Claude), a **Build Search Query** Code node and a **Serper: Web
+(unlike Claude), a **Build Search Query** Code node and a **Tavily: Web
 Search** HTTP node run before its "Call LLM" node, and the LLM's user
 message includes those real search results (title/link/snippet) alongside
 the ICP — see `08-icp-lead-prospector.json` and the "AI-driven lead
@@ -232,8 +232,18 @@ Active for the app's automatic calls to reach it.
   **Leads** page — with or without a real email — so nothing a search
   finds is hidden from the app; the full candidate list is also kept on
   `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
-  Serper search results across the **complete web** — not restricted to
-  any one site — pulling 20 results per run (see the note above); most of
+  Tavily search results across the **complete web** — not restricted to
+  any one site — pulling 20 results per run (see the note above). **Build
+  Search Query** joins job titles/industries/geographies/technologies/
+  keywords as plain space-separated terms — this was originally written
+  to avoid Google-operator syntax (`site:`, `OR`, parentheses) because a
+  prior Serper integration rejected those with `400: Query pattern not
+  allowed for free accounts`; it's kept as-is now that Tavily doesn't
+  have that restriction, since a plain natural-language query is exactly
+  what Tavily expects. Job titles are the one field worth setting on
+  every ICP regardless: without them the query has nothing pointing at
+  *people*, so it tends to surface company/product pages instead of
+  individuals. Most of
   those pages still won't surface an email directly, so after the LLM
   extracts candidates, a **Hunter: Email Finder** step looks up a real
   email per candidate by company + name (skipped when the candidate has
