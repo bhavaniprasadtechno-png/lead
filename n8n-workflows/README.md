@@ -140,9 +140,11 @@ through that same OpenAI-compatible endpoint. Agent 8 (Prospector) is the one ex
 since Google's OpenAI-compatible endpoint has no hosted web search tool
 (unlike Claude), a **Build Search Query** Code node and a **Tavily: Web
 Search** HTTP node run before its "Call LLM" node, and the LLM's user
-message includes those real search results (title/link/snippet) alongside
-the ICP — see `08-icp-lead-prospector.json` and the "AI-driven lead
-discovery" section below.
+message includes those real search results — enriched with a
+deterministically-parsed `extractedCompany`/`extractedLocation` per
+LinkedIn result, not just the raw title/link/snippet — alongside the ICP.
+See `08-icp-lead-prospector.json` and the "AI-driven lead discovery"
+section below for why that enrichment step exists.
 
 ## The webhook contract (both directions)
 
@@ -237,20 +239,47 @@ Active for the app's automatic calls to reach it.
   **Leads** page — with or without a real email — so nothing a search
   finds is hidden from the app; the full candidate list is also kept on
   `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
-  Tavily search results across the **complete web** — not restricted to
-  any one site — pulling 20 results per run (see the note above). **Build
-  Search Query** joins job titles/industries/geographies/technologies/
-  keywords as plain space-separated terms — this was originally written
-  to avoid Google-operator syntax (`site:`, `OR`, parentheses) because a
-  prior Serper integration rejected those with `400: Query pattern not
-  allowed for free accounts`; it's kept as-is now that Tavily doesn't
-  have that restriction, since a plain natural-language query is exactly
-  what Tavily expects. Job titles are the one field worth setting on
-  every ICP regardless: without them the query has nothing pointing at
-  *people*, so it tends to surface company/product pages instead of
-  individuals. Most of
-  those pages still won't surface an email directly, so after the LLM
-  extracts candidates, a **Hunter: Email Finder** step looks up a real
+  Tavily search results, pulling 20 results per run at `search_depth:
+  'advanced'` (see the note above).
+
+  **The search query is aimed at finding named people, not products.**
+  An earlier version of **Build Search Query** joined every ICP field
+  (titles, industries, geographies, *and* technologies/keywords like "3D
+  configurator", "AR try-on") into one query. That reliably returned
+  **zero candidates** in production: those technology/keyword terms bias
+  Tavily toward pages *about the product category* — vendor/marketing
+  pages for tools like Zakeke, VisionThree, Zolak — which never name a
+  real person, so the prospector LLM (correctly, per its strict
+  no-fabrication rules) had nothing to extract. The query now deliberately
+  **excludes** technologies/keywords and instead reads like
+  `"<titles> at a <industries> company in <geographies> - LinkedIn
+  profile, company leadership/team page, or press release naming them"`
+  — natural-language phrasing tuned for Tavily's semantic ranking, aimed
+  at pages that name a specific person. Job titles are the one field
+  worth setting on every ICP regardless: without them the query has
+  nothing pointing at *people* at all.
+
+  **The LLM needs the company pre-extracted, not just the raw snippet.**
+  Even with good search results (real LinkedIn profile pages naming real
+  people at real, ICP-matching companies), `gemini-3.5-flash-lite`
+  initially still returned zero candidates — it wasn't confidently
+  inferring a person's employer from unstructured scraped profile text
+  (Tavily's LinkedIn scrape is inconsistent: some profiles have a clean
+  `# Name\nCompany\nLocation` header, others don't) and, being a "lite"
+  model, gave up rather than reason it out (a handful of completion
+  tokens, an empty `candidates` array). The fix: **Call LLM (Web Search)**
+  now regex-parses `extractedCompany`/`extractedLocation` directly from
+  each LinkedIn result's header *before* the LLM ever sees it, alongside
+  the raw snippet — shifting the hard part (parsing messy scraped HTML5
+  markdown) to deterministic code and leaving the LLM with only the
+  judgment call (does this company fit the ICP?). This alone fixed it —
+  no system prompt change was needed, since a null `jobTitle` was already
+  a valid field per the existing prompt's own JSON schema; the model just
+  wasn't confident enough to use it without a pre-extracted company to
+  point to.
+
+  Most matched pages still won't surface an email directly, so after the
+  LLM extracts candidates, a **Hunter: Email Finder** step looks up a real
   email per candidate by company + name (skipped when the candidate has
   no company to search against) and only accepts Hunter's own
   high-confidence result (score ≥ 50). Candidates with no company, or
