@@ -1,5 +1,5 @@
 {
-  "name": "Agent 6 — Sequence / Drip Orchestrator",
+  "name": "Agent 6 \u2014 Sequence / Drip Orchestrator",
   "nodes": [
     {
       "id": "trigger",
@@ -32,7 +32,7 @@
       ],
       "notes": "ORG_ID is single-tenant here for simplicity; for multi-org, precede this with a loop over an org list.",
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { orgId: $vars.ORG_ID || '2ab9b11b-94f9-475c-869a-f2572e7b0ed7', timestamp, signature } }];"
       }
     },
     {
@@ -126,7 +126,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -136,7 +136,7 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{$vars.OPENROUTER_API_KEY}}"
+              "value": "=Bearer {{$vars.GOOGLE_AI_API_KEY}}"
             }
           ]
         },
@@ -145,7 +145,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (orchestrator)').first().json.agent.model}}"
+              "value": "={{ (() => { const m = $('GET Agent Prompt (orchestrator)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
             },
             {
               "name": "max_tokens",
@@ -154,6 +154,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (orchestrator)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('Split Out Enrollments').item.json)}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -169,7 +173,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nconst enrollment = $('Split Out Enrollments').item.json;\nconst step = enrollment.sequence.steps.find(s => s.order === enrollment.currentStep) || enrollment.sequence.steps[0];\nreturn [{ json: { ...parsed, leadId: enrollment.lead.id, orgId: enrollment.sequence.campaign.orgId, enrollmentId: enrollment.id, templateId: step ? step.templateId : null } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst enrollment = $('Split Out Enrollments').item.json;\nconst step = enrollment.sequence.steps.find(s => s.order === enrollment.currentStep) || enrollment.sequence.steps[0];\nreturn [{ json: { ...parsed, leadId: enrollment.lead.id, orgId: enrollment.sequence.campaign.orgId, enrollmentId: enrollment.id, templateId: step ? step.templateId : null } }];"
       }
     },
     {

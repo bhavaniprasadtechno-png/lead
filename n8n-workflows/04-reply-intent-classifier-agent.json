@@ -1,5 +1,5 @@
 {
-  "name": "Agent 4 — Reply Intent Classifier",
+  "name": "Agent 4 \u2014 Reply Intent Classifier",
   "nodes": [
     {
       "id": "trigger",
@@ -60,6 +60,44 @@
               "value": "={{$json.timestamp}}"
             }
           ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ifLeadFound",
+      "name": "IF: Lead Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        150
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.lead }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -114,7 +152,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -124,7 +162,7 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{$vars.OPENROUTER_API_KEY}}"
+              "value": "=Bearer {{$vars.GOOGLE_AI_API_KEY}}"
             }
           ]
         },
@@ -133,7 +171,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (classifier)').first().json.agent.model}}"
+              "value": "={{ (() => { const m = $('GET Agent Prompt (classifier)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
             },
             {
               "name": "max_tokens",
@@ -142,6 +180,10 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (classifier)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ reply: $('Sign: Get Prompt').first().json.replyText })}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
         }
@@ -157,7 +199,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
       }
     },
     {
@@ -284,11 +326,23 @@
       "main": [
         [
           {
-            "node": "Sign: Get Prompt",
+            "node": "IF: Lead Found",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "IF: Lead Found": {
+      "main": [
+        [
+          {
+            "node": "Sign: Get Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Sign: Get Prompt": {

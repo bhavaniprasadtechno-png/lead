@@ -38,11 +38,12 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 |---|---|---|
 | `N8N_WEBHOOK_SECRET` | A secret **you generate** — e.g. `openssl rand -base64 32`. This is not provided by n8n; it's a shared password you invent and set in **both** n8n and the app's `N8N_WEBHOOK_SECRET` env var, byte-for-byte identical. | every workflow (signing/verifying every request) |
 | `APP_BASE_URL` | Your deployed app's public URL, e.g. `https://leadpilot-web.onrender.com` (no trailing slash) | every workflow that calls the app's API |
-| `OPENROUTER_API_KEY` | Your [OpenRouter](https://openrouter.ai) API key (`sk-or-v1-...`) — sent as `Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}` on every "Call LLM" node. Not an n8n credential — just a Variable, same pattern as everything else on this page. | every workflow's LLM call |
+| `GOOGLE_AI_API_KEY` | Your [Google AI Studio](https://aistudio.google.com/apikey) API key — sent as `Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}` on every "Call LLM" node, against Google's OpenAI-compatible endpoint. Not an n8n credential — just a Variable, same pattern as everything else on this page. | every workflow's LLM call |
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
 | `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as `X-API-KEY` to `google.serper.dev/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data | Agent 8 |
+| `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
 Variables — these are actual API keys, kept out of both `$vars` and the
@@ -55,22 +56,23 @@ workflow JSON):
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
 
-Every LLM call goes through OpenRouter's OpenAI-compatible
+Every LLM call goes through Google AI Studio's OpenAI-compatible
 `/chat/completions` API instead of a dedicated n8n credential type —
 see **The LLM call shape** below.
 
-### The LLM call shape (OpenRouter, OpenAI-compatible)
+### The LLM call shape (Google AI Studio, OpenAI-compatible)
 
 Every "Call LLM" node in these workflows is the same shape:
 
 ```
-POST https://openrouter.ai/api/v1/chat/completions
-Authorization: Bearer {{$vars.OPENROUTER_API_KEY}}
+POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}
 content-type: application/json
 
 {
-  "model": "<agent.model from the app, e.g. nvidia/nemotron-3-ultra-550b-a55b:free>",
+  "model": "<agent.model from the app, e.g. gemini-2.5-flash>",
   "max_tokens": <N>,
+  "reasoning_effort": "none",
   "messages": [
     { "role": "system", "content": "<agent.systemPrompt from the app>" },
     { "role": "user", "content": "<JSON-stringified context>" }
@@ -78,24 +80,40 @@ content-type: application/json
 }
 ```
 
-This differs from Anthropic's Messages API in two ways worth knowing if
-you swap models again later: the system prompt is a `role: "system"`
-message inside the `messages` array (not a separate top-level `system`
-field), and the model's answer comes back as a plain string at
-`response.choices[0].message.content` (not a `content` block array). The
-"Parse ... JSON" Code node right after each LLM call reads that path and
-`JSON.parse()`s it — every agent's system prompt ends with a strict-JSON
-output instruction so this always has something parseable to read.
+Google AI Studio (the Gemini API) exposes an OpenAI-compatible endpoint
+that accepts this exact request shape and returns this exact response
+shape, which is why swapping providers here only meant changing each "Call
+LLM" node's `url` and `Authorization` header — nothing about the rest of
+the body changed. This differs from Anthropic's Messages API in two ways
+worth knowing if you swap models again later: the system prompt is a
+`role: "system"` message inside the `messages` array (not a separate
+top-level `system` field), and the model's answer comes back as a plain
+string at `response.choices[0].message.content` (not a `content` block
+array).
+
+Every current Gemini model (2.5+) does "thinking" by default, which
+consumes `max_tokens` on invisible reasoning before any visible output —
+at the small `max_tokens` budgets these agents use (256–1024), that was
+enough to return an empty/truncated response with nothing to parse.
+`reasoning_effort: "none"` disables it. Separately, Gemini tends to wrap
+JSON replies in ` ```json ... ``` ` fences even when the system prompt
+demands strict JSON, so every "Parse ... JSON" Code node strips a leading/
+trailing fence (`text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')`)
+before `JSON.parse()`s it, rather than trusting any one provider's
+formatting compliance — every agent's system prompt still ends with a
+strict-JSON output instruction, this is just a second line of defense.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
-no redeploy needed) — pick any [OpenRouter model slug](https://openrouter.ai/models),
-not just the NVIDIA Nemotron default. Agent 8 (Prospector) is the one
-exception to "just an LLM call": since OpenRouter/Nemotron has no hosted
-web search tool (unlike Claude), a **Build Search Query** Code node and a
-**Serper: Web Search** HTTP node run before its "Call LLM" node, and the
-LLM's user message includes those real search results (title/link/snippet)
-alongside the ICP — see `08-icp-lead-prospector.json` and the "AI-driven
-lead discovery" section below.
+no redeploy needed) — pick any Gemini [model
+id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
+through that same OpenAI-compatible endpoint, not just the Gemini 2.5
+Flash default. Agent 8 (Prospector) is the one exception to "just an LLM call":
+since Google's OpenAI-compatible endpoint has no hosted web search tool
+(unlike Claude), a **Build Search Query** Code node and a **Serper: Web
+Search** HTTP node run before its "Call LLM" node, and the LLM's user
+message includes those real search results (title/link/snippet) alongside
+the ICP — see `08-icp-lead-prospector.json` and the "AI-driven lead
+discovery" section below.
 
 ## The webhook contract (both directions)
 
@@ -179,12 +197,26 @@ Active for the app's automatic calls to reach it.
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
   app's **Approvals** queue and is never auto-sent.
-- Agent 8 never fabricates a lead: only candidates with a real, cited
-  email become `Lead` rows (`source = ai_discovery`); every candidate it
-  returns — with or without an email — is still stored on the
-  `LeadDiscoveryRun.candidates` field for review, so nothing found is
-  silently dropped, just not all of it becomes an actionable lead. It
-  grounds candidates in real Serper search results (see the note above);
-  a `site:linkedin.com/in` query built from the ICP still won't surface an
-  email on most profile pages, so expect a mix of candidates with and
-  without one — the prompt still refuses to guess an email pattern.
+- Agent 4's Gmail trigger polls the entire shared inbox, so it also fires
+  on emails that aren't lead replies at all (tool notifications,
+  newsletters, etc.). `GET Lead by Thread` uses `neverError` so the app's
+  expected 404 for those doesn't fail the run, and an **IF: Lead Found**
+  gate right after it skips anything that isn't a tracked lead thread —
+  only real lead replies reach the classifier LLM.
+- Agent 8 never fabricates contact info, but every candidate it returns
+  becomes a `Lead` row (`source = ai_discovery`) and shows up on the
+  **Leads** page — with or without a real email — so nothing a search
+  finds is hidden from the app; the full candidate list is also kept on
+  `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
+  Serper search results across the **complete web** — not restricted to
+  any one site — pulling 20 results per run (see the note above); most of
+  those pages still won't surface an email directly, so after the LLM
+  extracts candidates, a **Hunter: Email Finder** step looks up a real
+  email per candidate by company + name (skipped when the candidate has
+  no company to search against) and only accepts Hunter's own
+  high-confidence result (score ≥ 50). Candidates with no company, or
+  where Hunter can't find a confident match, are still imported as leads
+  — they just show "No email on file" in the app and skip the auto-send
+  step in Agent 3 (`IF: Has Email` gates drafting/sending on a real
+  address being present) until someone manually adds contact info.
+  Requires the `HUNTER_API_KEY` n8n Variable above.

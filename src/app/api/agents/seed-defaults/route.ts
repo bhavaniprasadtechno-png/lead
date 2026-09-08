@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { requireOrgSession, handleApiError, json } from "@/lib/api";
-import { DEFAULT_AGENT_PROMPTS } from "@/lib/constants";
+import { DEFAULT_AGENT_PROMPTS, DEFAULT_AGENT_MODEL } from "@/lib/constants";
 
 /**
  * POST /api/agents/seed-defaults
@@ -28,7 +28,7 @@ export async function POST() {
           name: def.name,
           type: def.type as any,
           systemPrompt: def.prompt,
-          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+          model: DEFAULT_AGENT_MODEL,
           isActive: true,
         },
       });

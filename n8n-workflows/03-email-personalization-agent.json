@@ -1,5 +1,5 @@
 {
-  "name": "Agent 3 — Email Personalization & Sender",
+  "name": "Agent 3 \u2014 Email Personalization & Sender",
   "nodes": [
     {
       "id": "trigger",
@@ -192,7 +192,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -202,7 +202,7 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{$vars.OPENROUTER_API_KEY}}"
+              "value": "=Bearer {{$vars.GOOGLE_AI_API_KEY}}"
             }
           ]
         },
@@ -211,7 +211,7 @@
           "parameters": [
             {
               "name": "model",
-              "value": "={{$('GET Agent Prompt (writer)').first().json.agent.model}}"
+              "value": "={{ (() => { const m = $('GET Agent Prompt (writer)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
             },
             {
               "name": "max_tokens",
@@ -220,8 +220,43 @@
             {
               "name": "messages",
               "value": "={{[{role:'system', content: $('GET Agent Prompt (writer)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ lead: $('GET Lead').first().json.lead, template: $('GET Template').first().json.template })}]}}"
+            },
+            {
+              "name": "reasoning_effort",
+              "value": "none"
             }
           ]
+        }
+      }
+    },
+    {
+      "id": "ifHasEmail",
+      "name": "IF: Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        980,
+        150
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$('GET Lead').first().json.lead.email }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -235,7 +270,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst parsed = JSON.parse(text);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, enrollmentId: $('Verify Signature').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, enrollmentId: $('Verify Signature').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
       }
     },
     {
@@ -411,7 +446,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
@@ -422,7 +457,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
@@ -433,11 +468,23 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "IF: Has Email": {
+      "main": [
+        [
+          {
+            "node": "Call LLM (Draft Email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Call LLM (Draft Email)": {

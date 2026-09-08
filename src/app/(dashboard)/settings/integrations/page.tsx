@@ -12,7 +12,7 @@ interface Integration {
 
 const PROVIDERS: { id: string; label: string; description: string }[] = [
   { id: "n8n", label: "n8n", description: "Orchestration layer running the AI agent workflows" },
-  { id: "openrouter", label: "OpenRouter", description: "Scoring, personalization, and intent classification (currently NVIDIA Nemotron 3 Ultra)" },
+  { id: "openrouter", label: "Google AI Studio", description: "Scoring, personalization, and intent classification (currently Gemini 2.5 Flash)" },
   { id: "apollo", label: "Apollo.io", description: "Company & contact enrichment" },
   { id: "clearbit", label: "Clearbit", description: "Company & contact enrichment (alternative)" },
   { id: "postmark", label: "Postmark", description: "Transactional & sequence email sending" },

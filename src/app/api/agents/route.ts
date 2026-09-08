@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireOrgSession, handleApiError, json } from "@/lib/api";
+import { DEFAULT_AGENT_MODEL } from "@/lib/constants";
 
 const createSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["enricher", "scorer", "writer", "classifier", "scheduler", "orchestrator", "housekeeping", "prospector"]),
   systemPrompt: z.string().min(1),
-  model: z.string().default("nvidia/nemotron-3-ultra-550b-a55b:free"),
+  model: z.string().default(DEFAULT_AGENT_MODEL),
   config: z.record(z.string(), z.any()).optional(),
 });
 
