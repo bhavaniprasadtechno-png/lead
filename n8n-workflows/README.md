@@ -197,6 +197,12 @@ Active for the app's automatic calls to reach it.
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
   app's **Approvals** queue and is never auto-sent.
+- Agent 4's Gmail trigger polls the entire shared inbox, so it also fires
+  on emails that aren't lead replies at all (tool notifications,
+  newsletters, etc.). `GET Lead by Thread` uses `neverError` so the app's
+  expected 404 for those doesn't fail the run, and an **IF: Lead Found**
+  gate right after it skips anything that isn't a tracked lead thread —
+  only real lead replies reach the classifier LLM.
 - Agent 8 never fabricates a lead: only candidates with a real, cited
   email become `Lead` rows (`source = ai_discovery`); every candidate it
   returns — with or without an email — is still stored on the

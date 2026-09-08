@@ -60,6 +60,44 @@
               "value": "={{$json.timestamp}}"
             }
           ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ifLeadFound",
+      "name": "IF: Lead Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        150
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.lead }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -288,11 +326,23 @@
       "main": [
         [
           {
-            "node": "Sign: Get Prompt",
+            "node": "IF: Lead Found",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "IF: Lead Found": {
+      "main": [
+        [
+          {
+            "node": "Sign: Get Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Sign: Get Prompt": {
