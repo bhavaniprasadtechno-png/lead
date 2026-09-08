@@ -45,6 +45,12 @@ export default function LeadsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  async function remove(id: string) {
+    if (!confirm("Delete this lead? This removes its activity, enrichment, and sequence history too.")) return;
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    await fetch(`/api/leads/${id}`, { method: "DELETE" });
+  }
+
   return (
     <div>
       <PageHeader
@@ -92,6 +98,7 @@ export default function LeadsPage() {
                 <th className="px-4 py-3 font-medium">Score</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Owner</th>
+                <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -115,6 +122,14 @@ export default function LeadsPage() {
                     <StatusBadge status={lead.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-600">{lead.owner?.name ?? "Unassigned"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      className="text-xs text-red-600 font-medium hover:underline"
+                      onClick={() => remove(lead.id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

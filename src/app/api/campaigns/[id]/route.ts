@@ -40,3 +40,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return handleApiError(err);
   }
 }
+
+/** DELETE /api/campaigns/:id — cascades to its sequences and their enrollments. */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireOrgSession();
+    const { id } = await params;
+    const existing = await prisma.campaign.findFirst({ where: { id, orgId: session.orgId } });
+    if (!existing) throw new ApiError("Campaign not found", 404);
+    await prisma.campaign.delete({ where: { id } });
+    return json({ ok: true });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

@@ -39,13 +39,21 @@ export default function IntegrationsPage() {
     return integrations.find((i) => i.provider === provider)?.status ?? "disconnected";
   }
 
-  async function connect(provider: string) {
+  async function setStatus(provider: string, status: "connected" | "disconnected") {
     await fetch("/api/integrations", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider, status: "connected", credentialRef: webhookSecret || undefined }),
+      body: JSON.stringify({
+        provider,
+        status,
+        ...(status === "connected" ? { credentialRef: webhookSecret || undefined } : {}),
+      }),
     });
     load();
+  }
+
+  function toggle(provider: string) {
+    setStatus(provider, statusFor(provider) === "connected" ? "disconnected" : "connected");
   }
 
   return (
@@ -73,7 +81,8 @@ export default function IntegrationsPage() {
                   <div className="text-xs text-slate-500 mt-0.5">{p.description}</div>
                 </div>
                 <button
-                  onClick={() => connect(p.id)}
+                  onClick={() => toggle(p.id)}
+                  title={status === "connected" ? "Click to disconnect" : "Click to connect"}
                   className={`badge cursor-pointer ${status === "connected" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}
                 >
                   {status}

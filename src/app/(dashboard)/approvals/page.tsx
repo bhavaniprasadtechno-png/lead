@@ -15,6 +15,9 @@ interface Approval {
 
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/approvals");
@@ -26,12 +29,27 @@ export default function ApprovalsPage() {
     load();
   }, [load]);
 
-  async function decide(id: string, decision: "approved" | "rejected") {
-    setApprovals((prev) => prev.filter((a) => a.id !== id));
-    await fetch(`/api/approvals/${id}`, {
+  function startEdit(a: Approval) {
+    setEditingId(a.id);
+    setDrafts((prev) => ({ ...prev, [a.id]: JSON.stringify(a.output, null, 2) }));
+    setErrors((prev) => ({ ...prev, [a.id]: "" }));
+  }
+
+  async function decide(a: Approval, decision: "approved" | "rejected") {
+    let editedOutput: unknown;
+    if (editingId === a.id) {
+      try {
+        editedOutput = JSON.parse(drafts[a.id] ?? "");
+      } catch {
+        setErrors((prev) => ({ ...prev, [a.id]: "Edited output must be valid JSON" }));
+        return;
+      }
+    }
+    setApprovals((prev) => prev.filter((x) => x.id !== a.id));
+    await fetch(`/api/approvals/${a.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...(editedOutput !== undefined ? { editedOutput } : {}) }),
     });
   }
 
@@ -66,15 +84,40 @@ export default function ApprovalsPage() {
                     <pre className="text-xs bg-slate-50 rounded p-2 overflow-x-auto max-h-48">{JSON.stringify(a.input, null, 2)}</pre>
                   </div>
                   <div>
-                    <div className="text-xs font-medium text-slate-500 mb-1">AI-drafted output</div>
-                    <pre className="text-xs bg-slate-50 rounded p-2 overflow-x-auto max-h-48">{JSON.stringify(a.output, null, 2)}</pre>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-medium text-slate-500">AI-drafted output</div>
+                      {editingId !== a.id && (
+                        <button
+                          className="text-xs text-brand-600 font-medium hover:underline"
+                          onClick={() => startEdit(a)}
+                        >
+                          Edit before approving
+                        </button>
+                      )}
+                    </div>
+                    {editingId === a.id ? (
+                      <textarea
+                        className="input font-mono text-xs w-full max-h-48"
+                        rows={8}
+                        value={drafts[a.id] ?? ""}
+                        onChange={(e) => setDrafts((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                      />
+                    ) : (
+                      <pre className="text-xs bg-slate-50 rounded p-2 overflow-x-auto max-h-48">{JSON.stringify(a.output, null, 2)}</pre>
+                    )}
+                    {errors[a.id] && <div className="text-xs text-red-600 mt-1">{errors[a.id]}</div>}
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
-                  <button className="btn-danger" onClick={() => decide(a.id, "rejected")}>
+                  {editingId === a.id && (
+                    <button className="btn-secondary" onClick={() => setEditingId(null)}>
+                      Cancel edit
+                    </button>
+                  )}
+                  <button className="btn-danger" onClick={() => decide(a, "rejected")}>
                     Reject
                   </button>
-                  <button className="btn-primary" onClick={() => decide(a.id, "approved")}>
+                  <button className="btn-primary" onClick={() => decide(a, "approved")}>
                     Approve &amp; send
                   </button>
                 </div>
