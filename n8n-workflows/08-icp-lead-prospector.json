@@ -311,6 +311,10 @@
         4000,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "={{ $vars.APP_BASE_URL }}/api/agents/{{ $json.agentId }}/runs",
