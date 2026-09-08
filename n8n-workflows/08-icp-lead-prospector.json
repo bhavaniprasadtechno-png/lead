@@ -135,7 +135,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) && icp.jobTitles.length ? icp.jobTitles : ['Founder', 'CEO'];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\n// Deliberately excludes technologies/keywords (e.g. \"3D configurator\", \"AR\n// try-on\", \"Shopify\") from the query: those terms pull back pages ABOUT the\n// technology/vendors (Zakeke, VisionThree, Zolak...) rather than pages that\n// name a real PERSON at a company who'd be a buyer. This query is aimed at\n// finding named individuals instead - not just on LinkedIn, but anywhere on\n// the web a real person is named (company team/leadership/about pages,\n// press releases), so results aren't LinkedIn-only.\nconst titlesPart = titles.slice(0, 3).join(', ');\nconst industriesPart = industries.slice(0, 4).join(', ');\nlet query = `${titlesPart} at a ${industriesPart || 'B2B'} company`;\nif (geographies.length) query += ` in ${geographies.slice(0, 2).join(' or ')}`;\nquery += ' - named on a company leadership/team/about page, in a press release, or on their LinkedIn profile';\nreturn [{ json: { query } }];"
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) && icp.jobTitles.length ? icp.jobTitles : ['Founder', 'CEO'];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst industriesPart = industries.slice(0, 4).join(', ');\nconst geoSuffix = geographies.length ? (' in ' + geographies.slice(0, 2).join(' or ')) : '';\nconst tail = ' - named on a company leadership/team/about page, in a press release, or on their LinkedIn profile';\n// One focused search PER job title (capped at 6 to keep Tavily usage\n// bounded - free tier is 1,000 searches/month) instead of one blended\n// query that only ever covered the first 3 titles: a query diluted across\n// many personas at once finds far fewer distinct real candidates than the\n// same number of titles searched separately. Tavily: Web Search runs once\n// per item n8n produces here, and Aggregate Search Results merges them\n// all back into one pool before the LLM ever sees them.\nconst cappedTitles = titles.slice(0, 6);\nreturn cappedTitles.map(function (title) {\n  var q = title + ' at a ' + (industriesPart || 'B2B') + ' company' + geoSuffix + tail;\n  return { json: { query: q } };\n});"
       }
     },
     {
@@ -162,7 +162,21 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ api_key: $vars.TAVILY_API_KEY, query: $json.query, max_results: 20, search_depth: 'advanced' }) }}"
+        "jsonBody": "={{ JSON.stringify({ api_key: $vars.TAVILY_API_KEY, query: $json.query, max_results: 15, search_depth: 'advanced' }) }}"
+      }
+    },
+    {
+      "id": "aggregate-search-results",
+      "name": "Aggregate Search Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        200
+      ],
+      "notes": "Build Search Query fans out into one item per job title, so Tavily: Web Search runs once per title (n8n's default per-item execution). This node collects all of those responses back into a single deduped result set (by URL) before the LLM ever sees them, so Call LLM (Web Search) still runs exactly once per ICP run against the combined pool.",
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst seen = new Set();\nconst combined = [];\nfor (var i = 0; i < items.length; i++) {\n  var results = (items[i].json && items[i].json.results) || [];\n  for (var j = 0; j < results.length; j++) {\n    var r = results[j];\n    if (r && r.url && !seen.has(r.url)) {\n      seen.add(r.url);\n      combined.push(r);\n    }\n  }\n}\nreturn [{ json: { results: combined, queryCount: items.length } }];"
       }
     },
     {
@@ -192,9 +206,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const guessCompanyFromTitle = (title) => { if (!title) return null; let mm = title.match(/^(.+?)\\s*[-|]\\s*Leadership(?:\\s*team)?\\s*$/i); if (mm) return mm[1].trim(); mm = title.match(/^(?:Leadership|Team)(?:\\s*team)?\\s*[-|]\\s*(.+)$/i); if (mm) return mm[1].trim(); mm = title.match(/\\|\\s*([^|]+?)(?:\\s+Leadership)?\\s*$/i); if (mm && mm[1].trim().length > 1) return mm[1].trim(); mm = title.match(/^(.+?)\\s*[-|]\\s*(?:Our\\s*)?Team\\s*$/i); if (mm) return mm[1].trim(); return null; }; const rawResults = $('Tavily: Web Search').first().json.results || []; const enriched = rawResults.map(r => { const isLinkedInProfile = /linkedin\\.com\\/in\\//i.test(r.url); let company = null, location = null; if (isLinkedInProfile) { const m2 = (r.content || '').match(/^#\\s*.+\\n([^\\n]+)\\n([^\\n]+)/m); if (m2) { company = m2[1].trim(); location = m2[2].trim(); } } else { company = guessCompanyFromTitle(r.title); } return { title: r.title, link: r.url, isLinkedInProfile, extractedCompany: company, extractedLocation: location, snippet: (r.content || '').slice(0, 1200) }; }); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: enriched })}] }; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const guessCompanyFromTitle = (title) => { if (!title) return null; let mm = title.match(/^(.+?)\\s*[-|]\\s*Leadership(?:\\s*team)?\\s*$/i); if (mm) return mm[1].trim(); mm = title.match(/^(?:Leadership|Team)(?:\\s*team)?\\s*[-|]\\s*(.+)$/i); if (mm) return mm[1].trim(); mm = title.match(/\\|\\s*([^|]+?)(?:\\s+Leadership)?\\s*$/i); if (mm && mm[1].trim().length > 1) return mm[1].trim(); mm = title.match(/^(.+?)\\s*[-|]\\s*(?:Our\\s*)?Team\\s*$/i); if (mm) return mm[1].trim(); return null; }; const rawResults = $('Aggregate Search Results').first().json.results || []; const enriched = rawResults.map(r => { const isLinkedInProfile = /linkedin\\.com\\/in\\//i.test(r.url); let company = null, location = null; if (isLinkedInProfile) { const m2 = (r.content || '').match(/^#\\s*.+\\n([^\\n]+)\\n([^\\n]+)/m); if (m2) { company = m2[1].trim(); location = m2[2].trim(); } } else { company = guessCompanyFromTitle(r.title); } return { title: r.title, link: r.url, isLinkedInProfile, extractedCompany: company, extractedLocation: location, snippet: (r.content || '').slice(0, 1200) }; }); const queries = $('Build Search Query').all().map(i => i.json.query); const body = { model, max_tokens: 8192, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQueries: queries, searchResults: enriched })}] }; return body; })()) }}"
       },
-      "notes": "Search results are enriched before reaching the LLM with an extractedCompany field: for LinkedIn profile URLs it's parsed deterministically from the page header (name/company/location lines); for any other result (company team/leadership/about pages, press releases) it's guessed from the page title via a few common patterns (\"X - Leadership\", \"Leadership - X\", \"Name - Title | X\", \"X - Team\"). This gives the model the same kind of reliable anchor for non-LinkedIn sources that fixed the original 0-candidates issue for LinkedIn ones - without it, the lite model was too conservative to extract a company from raw scraped text on its own, even when the answer was clearly present in the snippet.",
+      "notes": "Search results are enriched before reaching the LLM with an extractedCompany field: for LinkedIn profile URLs it's parsed deterministically from the page header (name/company/location lines); for any other result (company team/leadership/about pages, press releases) it's guessed from the page title via a few common patterns (\"X - Leadership\", \"Leadership - X\", \"Name - Title | X\", \"X - Team\"). This gives the model the same kind of reliable anchor for non-LinkedIn sources that fixed the original 0-candidates issue for LinkedIn ones - without it, the lite model was too conservative to extract a company from raw scraped text on its own, even when the answer was clearly present in the snippet. Reads from Aggregate Search Results (the combined pool across every job-title query, not a single Tavily call) and uses an 8192 output-token budget so a larger pool doesn't get truncated into fewer candidates than it should find.",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
@@ -598,6 +612,17 @@
       ]
     },
     "Tavily: Web Search": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Search Results": {
       "main": [
         [
           {

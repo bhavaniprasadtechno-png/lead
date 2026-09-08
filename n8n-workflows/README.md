@@ -320,6 +320,26 @@ Active for the app's automatic calls to reach it.
   model just wasn't confident enough to use it without a pre-extracted
   company to point to.
 
+  **One blended query only ever covers a fraction of the ICP — search per
+  job title instead.** Even after the fixes above, a run would often
+  return just one or two candidates despite the ICP listing six job
+  titles: **Build Search Query** used to build a single query from only
+  the *first three* titles, blended together with the industries into one
+  string. One query diluted across several personas at once returns a
+  narrower, less relevant result set than the same personas searched
+  separately — and any titles past the first three were never searched at
+  all. **Build Search Query** now returns one item per job title (capped
+  at 6, to keep Tavily usage bounded — free tier is 1,000 searches/month)
+  instead of one item total; n8n runs **Tavily: Web Search** once per item
+  automatically, and a new **Aggregate Search Results** node merges every
+  response back into one deduped pool (by URL) before **Call LLM (Web
+  Search)** — which still runs exactly once per ICP run, now against the
+  combined results, with its output-token budget raised to 8192 so a
+  larger candidate pool isn't truncated. Verified live: with only 2 titles
+  populated on the test ICP (the fallback default, `Founder`/`CEO` — the
+  real ICP's title list was empty at the time), this alone found 5 real,
+  distinct candidates from a single run, versus 1 before.
+
   **Split Out silently nests its output — always normalize after it.**
   Once real candidates started coming back, reporting them to the app
   failed with a `422: Required` from `POST
@@ -348,4 +368,10 @@ Active for the app's automatic calls to reach it.
   just show "No email on file" in the app and skip the auto-send step in
   Agent 3 (`IF: Has Email` gates drafting/sending on a real address being
   present) until someone manually adds contact info. Requires the
-  `HUNTER_API_KEY` n8n Variable above.
+  `HUNTER_API_KEY` n8n Variable above. Note that Hunter's free tier is a
+  much tighter budget than Tavily's (25 lookups/month vs. 1,000 searches)
+  — now that a single ICP run can surface many more candidates than
+  before, it's easy to burn through Hunter's monthly quota in one or two
+  runs. That's expected, not a bug: candidates still get imported as leads
+  either way, just without a verified email once the quota's spent for the
+  month.
