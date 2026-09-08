@@ -42,7 +42,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
-| `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as `X-API-KEY` to `google.serper.dev/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data | Agent 8 |
+| `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
@@ -70,9 +70,8 @@ Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}
 content-type: application/json
 
 {
-  "model": "<agent.model from the app, e.g. gemma-4-31b-it>",
+  "model": "<agent.model from the app, e.g. gemini-3.5-flash-lite>",
   "max_tokens": <N>,
-  "reasoning_effort": "none",
   "messages": [
     { "role": "system", "content": "<agent.systemPrompt from the app>" },
     { "role": "user", "content": "<JSON-stringified context>" }
@@ -80,11 +79,9 @@ content-type: application/json
 }
 ```
 
-`reasoning_effort` is only included when the resolved model is **not**
-Gemma (see below) — every "Call LLM" node builds its body as a single
-JSON expression (`specifyBody: "json"`) precisely so it can add or omit
-that field conditionally, rather than the fixed key/value list a plain
-keypair body would force.
+Every "Call LLM" node builds its body as a single JSON expression
+(`specifyBody: "json"`) rather than a plain keypair body, so the model
+name can be swapped in dynamically per-org.
 
 Google AI Studio exposes an OpenAI-compatible endpoint that accepts this
 exact request shape and returns this exact response shape, which is why
@@ -96,48 +93,58 @@ message inside the `messages` array (not a separate top-level `system`
 field), and the model's answer comes back as a plain string at
 `response.choices[0].message.content` (not a `content` block array).
 
-Every current Gemini model (2.5+) does "thinking" by default, which
-consumes `max_tokens` on invisible reasoning before any visible output —
-at the small `max_tokens` budgets these agents use (256–1024), that was
-enough to return an empty/truncated response with nothing to parse.
-`reasoning_effort: "none"` disables it for Gemini models. Separately,
-every model here tends to wrap JSON replies in ` ```json ... ``` ` fences
-even when the system prompt demands strict JSON, so every "Parse ... JSON"
-Code node strips a leading/trailing fence
-(`text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')`) before
-`JSON.parse()`s it, rather than trusting any one provider's formatting
-compliance — every agent's system prompt still ends with a strict-JSON
-output instruction, this is just a second line of defense.
+**No `reasoning_effort` param is sent, on purpose.** Earlier revisions of
+these workflows sent `reasoning_effort: "none"` to disable Gemini's
+default "thinking" behavior (which otherwise burns `max_tokens` on
+invisible reasoning before any visible output, at the small budgets these
+agents use). That worked on `gemini-2.5-flash`, but every model tried
+since — `gemma-4-31b-it` (`400: Thinking budget is not supported for this
+model`) and `gemini-3.5-flash-lite` (`400: Request contains an invalid
+argument`) — rejects the param outright. Since it's not universally safe,
+no "Call LLM" node sends it at all; `gemini-3.5-flash-lite` (the current
+default) doesn't need it — it does not emit hidden reasoning tokens the
+way `gemini-2.5-flash`/`gemma-4-31b-it` did, so omitting the param is
+sufficient rather than a workaround. Separately, every model here tends to
+wrap JSON replies in ` ```json ... ``` ` fences even when the system
+prompt demands strict JSON, so every "Parse ... JSON" Code node strips a
+leading/trailing fence (`text.trim().replace(/^```(?:json)?\s*|\s*```$/g,
+'')`) before `JSON.parse()`s it, rather than trusting any one provider's
+formatting compliance — every agent's system prompt still ends with a
+strict-JSON output instruction, this is just a second line of defense.
+Every "Parse ... JSON" node also strips a `<thought>...</thought>` block
+before that fence-stripping — a no-op for `gemini-3.5-flash-lite`, but
+needed if an org switches an agent to a Gemma model, which prepends its
+full reasoning as literal `<thought>` text and can consume the entire
+`max_tokens` budget doing so (every "Call LLM" node floors `max_tokens` at
+4096 when it detects a Gemma model, `/^gemma/i.test(model)`, to leave room
+for both the reasoning and the answer).
 
-**Gemma models need different handling than Gemini.** The current default,
-`gemma-4-31b-it`, **rejects** `reasoning_effort` outright (`400: Thinking
-budget is not supported for this model`), so every "Call LLM" node
-detects a Gemma model (`/^gemma/i.test(model)`) and omits that field for
-it entirely. Gemma also doesn't hide its reasoning — it prepends a literal
-`<thought>...</thought>` block to its answer, which can consume the whole
-`max_tokens` budget before any real JSON appears (seen in testing: a
-512-token budget produced 0 completion tokens, all thinking). Every
-"Parse ... JSON" node strips `<thought>...</thought>` before fence-
-stripping, and Gemma's `max_tokens` is floored at 4096 regardless of the
-agent's configured budget to leave room for both the reasoning and the
-answer. **Known issue:** even with these fixes, `gemma-4-31b-it` returned
-a hard `500 Internal error` from Google in roughly half of live test runs
-during development (calls took 40–90s when they did succeed) — every
-"Call LLM" node has `retryOnFail` (3 tries, 2s apart), which helps but
-does not eliminate this. If reliability matters more than using Gemma
-specifically, switch the model back to `gemini-2.5-flash` from the **AI
-Agents** page — it was verified working consistently.
+**Known history, in case a similar issue resurfaces:** `gemma-4-31b-it`
+(tried first) had three separate reliability problems in production
+beyond the `reasoning_effort` rejection above — it also hit a hard
+16,000-token free-tier **input** quota that a single ICP search (long
+prompt + 20 search results) could exceed outright, and returned a hard
+`500 Internal error` from Google in roughly half of live test runs during
+development. `gemini-2.5-flash-lite` (tried next) turned out to be fully
+deprecated (`404: ... no longer available to new users`), with Google's
+own error message recommending `gemini-3.5-flash-lite` — the model
+that's now the default, verified reliable (clean JSON, ~750ms latency,
+no quota issues) across multiple live test runs. Every "Call LLM" node
+still has `retryOnFail` (3 tries, 2s apart) as a safety net regardless of
+model.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
 no redeploy needed) — pick any Gemini or Gemma [model
 id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
 through that same OpenAI-compatible endpoint. Agent 8 (Prospector) is the one exception to "just an LLM call":
 since Google's OpenAI-compatible endpoint has no hosted web search tool
-(unlike Claude), a **Build Search Query** Code node and a **Serper: Web
+(unlike Claude), a **Build Search Query** Code node and a **Tavily: Web
 Search** HTTP node run before its "Call LLM" node, and the LLM's user
-message includes those real search results (title/link/snippet) alongside
-the ICP — see `08-icp-lead-prospector.json` and the "AI-driven lead
-discovery" section below.
+message includes those real search results — enriched with a
+deterministically-parsed `extractedCompany`/`extractedLocation` per
+LinkedIn result, not just the raw title/link/snippet — alongside the ICP.
+See `08-icp-lead-prospector.json` and the "AI-driven lead discovery"
+section below for why that enrichment step exists.
 
 ## The webhook contract (both directions)
 
@@ -232,10 +239,47 @@ Active for the app's automatic calls to reach it.
   **Leads** page — with or without a real email — so nothing a search
   finds is hidden from the app; the full candidate list is also kept on
   `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
-  Serper search results across the **complete web** — not restricted to
-  any one site — pulling 20 results per run (see the note above); most of
-  those pages still won't surface an email directly, so after the LLM
-  extracts candidates, a **Hunter: Email Finder** step looks up a real
+  Tavily search results, pulling 20 results per run at `search_depth:
+  'advanced'` (see the note above).
+
+  **The search query is aimed at finding named people, not products.**
+  An earlier version of **Build Search Query** joined every ICP field
+  (titles, industries, geographies, *and* technologies/keywords like "3D
+  configurator", "AR try-on") into one query. That reliably returned
+  **zero candidates** in production: those technology/keyword terms bias
+  Tavily toward pages *about the product category* — vendor/marketing
+  pages for tools like Zakeke, VisionThree, Zolak — which never name a
+  real person, so the prospector LLM (correctly, per its strict
+  no-fabrication rules) had nothing to extract. The query now deliberately
+  **excludes** technologies/keywords and instead reads like
+  `"<titles> at a <industries> company in <geographies> - LinkedIn
+  profile, company leadership/team page, or press release naming them"`
+  — natural-language phrasing tuned for Tavily's semantic ranking, aimed
+  at pages that name a specific person. Job titles are the one field
+  worth setting on every ICP regardless: without them the query has
+  nothing pointing at *people* at all.
+
+  **The LLM needs the company pre-extracted, not just the raw snippet.**
+  Even with good search results (real LinkedIn profile pages naming real
+  people at real, ICP-matching companies), `gemini-3.5-flash-lite`
+  initially still returned zero candidates — it wasn't confidently
+  inferring a person's employer from unstructured scraped profile text
+  (Tavily's LinkedIn scrape is inconsistent: some profiles have a clean
+  `# Name\nCompany\nLocation` header, others don't) and, being a "lite"
+  model, gave up rather than reason it out (a handful of completion
+  tokens, an empty `candidates` array). The fix: **Call LLM (Web Search)**
+  now regex-parses `extractedCompany`/`extractedLocation` directly from
+  each LinkedIn result's header *before* the LLM ever sees it, alongside
+  the raw snippet — shifting the hard part (parsing messy scraped HTML5
+  markdown) to deterministic code and leaving the LLM with only the
+  judgment call (does this company fit the ICP?). This alone fixed it —
+  no system prompt change was needed, since a null `jobTitle` was already
+  a valid field per the existing prompt's own JSON schema; the model just
+  wasn't confident enough to use it without a pre-extracted company to
+  point to.
+
+  Most matched pages still won't surface an email directly, so after the
+  LLM extracts candidates, a **Hunter: Email Finder** step looks up a real
   email per candidate by company + name (skipped when the candidate has
   no company to search against) and only accepts Hunter's own
   high-confidence result (score ≥ 50). Candidates with no company, or

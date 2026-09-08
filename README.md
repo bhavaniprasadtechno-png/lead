@@ -1,7 +1,7 @@
 # LeadPilot — AI-Powered Lead Generation & Management Platform
 
 Captures leads from multiple channels, uses AI (via Google AI Studio —
-currently Gemma 4 31B) to enrich, score, and qualify them, and runs
+currently Gemini 3.5 Flash Lite) to enrich, score, and qualify them, and runs
 autonomous n8n "agents" to nurture leads via
 personalized email sequences until they convert or disqualify — with
 humans stepping in only at high-value decision points (meeting booked,
@@ -62,15 +62,16 @@ keywords — on the **ICP Search** page, then click **Run Search Now**.
 
 Agent 8 was originally designed around Claude's hosted web search tool,
 which has no Google AI Studio equivalent (server-side tools are
-provider-specific). It now searches via **Serper** instead: a
+provider-specific). It now searches via **Tavily** instead: a
 **Build Search Query** step turns the ICP's job titles/industries/
-geographies/technologies/keywords into a search query, a
-**Serper: Web Search** step runs it against Google's **complete web**
-index (company sites, news, directories, LinkedIn, etc. — not restricted
+geographies/technologies/keywords into a plain natural-language query, a
+**Tavily: Web Search** step runs it against the **complete web**
+(company sites, news, directories, LinkedIn, etc. — not restricted
 to any one site) and pulls back 20 results, and the LLM extracts/structures
 candidates only from those real results (its prompt still forbids
-answering from training data alone). Requires a `SERPER_API_KEY` n8n
-Variable — see `n8n-workflows/README.md`.
+answering from training data alone). Requires a `TAVILY_API_KEY` n8n
+Variable (free tier: 1,000 searches/month, no card) — see
+`n8n-workflows/README.md`.
 
 Candidates found are grounded in a real, cited source — never an invented
 person, company, or email. Since search snippets rarely expose an email

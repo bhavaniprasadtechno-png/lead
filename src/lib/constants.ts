@@ -1,9 +1,9 @@
 // Google AI Studio model slug, called via its OpenAI-compatible
 // /chat/completions endpoint — see n8n-workflows/README.md for the request
-// shape every agent uses (including the Gemma-specific handling: no
-// reasoning_effort, <thought> stripping) and the GOOGLE_AI_API_KEY n8n
+// shape every agent uses (no reasoning_effort param — every Gemini/Gemma
+// model tried so far rejects it with a 400) and the GOOGLE_AI_API_KEY n8n
 // Variable it needs.
-export const DEFAULT_AGENT_MODEL = "gemma-4-31b-it";
+export const DEFAULT_AGENT_MODEL = "gemini-3.5-flash-lite";
 
 export const LEAD_STATUSES = [
   "new",

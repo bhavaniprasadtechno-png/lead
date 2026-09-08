@@ -135,29 +135,25 @@
         0
       ],
       "parameters": {
-        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) ? icp.jobTitles : [];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst technologies = Array.isArray(icp.technologies) ? icp.technologies : [];\nconst keywords = Array.isArray(icp.keywords) ? icp.keywords : [];\nconst titlePart = titles.length ? '(' + titles.map((t) => '\"' + t + '\"').join(' OR ') + ')' : '';\nconst parts = [titlePart, industries.join(' '), geographies.join(' '), technologies.join(' '), keywords.join(' ')].filter(Boolean);\nconst query = parts.join(' ');\nreturn [{ json: { query } }];"
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) && icp.jobTitles.length ? icp.jobTitles : ['Founder', 'CEO'];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\n// Deliberately excludes technologies/keywords (e.g. \"3D configurator\", \"AR\n// try-on\", \"Shopify\") from the query: those terms pull back pages ABOUT the\n// technology/vendors (Zakeke, VisionThree, Zolak...) rather than pages that\n// name a real PERSON at a company who'd be a buyer. This query is aimed at\n// finding named individuals instead.\nconst titlesPart = titles.slice(0, 3).join(', ');\nconst industriesPart = industries.slice(0, 4).join(', ');\nlet query = `${titlesPart} at a ${industriesPart || 'B2B'} company`;\nif (geographies.length) query += ` in ${geographies.slice(0, 2).join(' or ')}`;\nquery += ' - LinkedIn profile, company leadership/team page, or press release naming them';\nreturn [{ json: { query } }];"
       }
     },
     {
       "id": "serperSearch",
-      "name": "Serper: Web Search",
+      "name": "Tavily: Web Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1000,
         200
       ],
-      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the SERPER_API_KEY n8n Variable (https://serper.dev).",
+      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the TAVILY_API_KEY n8n Variable (free tier: 1,000 searches/month, no card - https://tavily.com). Unlike Serper (Google's raw operator syntax), Tavily accepts plain natural-language queries with no site:/OR/parentheses restrictions.",
       "parameters": {
         "method": "POST",
-        "url": "https://google.serper.dev/search",
+        "url": "https://api.tavily.com/search",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "X-API-KEY",
-              "value": "={{ $vars.SERPER_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -165,19 +161,8 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "q",
-              "value": "={{ $json.query }}"
-            },
-            {
-              "name": "num",
-              "value": "20"
-            }
-          ]
-        },
-        "options": {}
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ api_key: $vars.TAVILY_API_KEY, query: $json.query, max_results: 20, search_depth: 'advanced' }) }}"
       }
     },
     {
@@ -207,8 +192,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: ($('Serper: Web Search').first().json.organic || []).map(r => ({ title: r.title, link: r.link, snippet: r.snippet })) })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const rawResults = $('Tavily: Web Search').first().json.results || []; const enriched = rawResults.map(r => { const isLinkedInProfile = /linkedin\\.com\\/in\\//i.test(r.url); let company = null, location = null; if (isLinkedInProfile) { const m2 = (r.content || '').match(/^#\\s*.+\\n([^\\n]+)\\n([^\\n]+)/m); if (m2) { company = m2[1].trim(); location = m2[2].trim(); } } return { title: r.title, link: r.url, isLinkedInProfile, extractedCompany: company, extractedLocation: location, snippet: (r.content || '').slice(0, 1200) }; }); const body = { model, max_tokens: 4096, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $('Build Search Query').first().json.query, searchResults: enriched })}] }; return body; })()) }}"
       },
+      "notes": "Search results are enriched before reaching the LLM: for LinkedIn profile URLs, extractedCompany/extractedLocation are parsed deterministically from the page header (name/company/location lines) so the model doesn't have to infer employer from messy scraped text - this is what fixed the 0-candidates issue (the lite model was too conservative to confidently extract a company from raw snippets on its own, even when the data was there).",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
@@ -590,14 +576,14 @@
       "main": [
         [
           {
-            "node": "Serper: Web Search",
+            "node": "Tavily: Web Search",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Serper: Web Search": {
+    "Tavily: Web Search": {
       "main": [
         [
           {
