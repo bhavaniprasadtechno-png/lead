@@ -70,14 +70,17 @@ candidates only from those real results (its prompt still forbids
 answering from training data alone). Requires a `SERPER_API_KEY` n8n
 Variable — see `n8n-workflows/README.md`.
 
-Candidates found (once search is wired back in) are grounded in a real,
-cited source — never an invented person, company, or email. Only
-candidates where a real email was found become `Lead` records
-(`source = ai_discovery`) and re-enter the exact same enrichment →
-scoring → outreach pipeline as any other lead; candidates without a
-verifiable email are still kept on the run for review, just not
-auto-imported. Every run is deduped against existing leads by email
-within the org.
+Candidates found are grounded in a real, cited source — never an invented
+person, company, or email. Since LinkedIn search snippets rarely expose an
+email, a **Hunter: Email Finder** step looks up a real, verified email per
+candidate by company + name (requires a `HUNTER_API_KEY` n8n Variable —
+see `n8n-workflows/README.md`) before results are reported back. Only
+candidates where a real email was found (from Hunter or already present)
+become `Lead` records (`source = ai_discovery`) and re-enter the exact
+same enrichment → scoring → outreach pipeline as any other lead;
+candidates without a verifiable email are still kept on the run for
+review, just not auto-imported. Every run is deduped against existing
+leads by email within the org.
 
 Every agent's **system prompt lives in the database** (`agents.system_prompt`,
 editable from the **AI Agents** page in the app UI) — n8n fetches it at

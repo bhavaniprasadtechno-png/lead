@@ -1,5 +1,5 @@
 {
-  "name": "Agent 8 \u2014 ICP Lead Prospector",
+  "name": "Agent 8 — ICP Lead Prospector",
   "nodes": [
     {
       "id": "trigger",
@@ -237,7 +237,7 @@
         1440,
         0
       ],
-      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). OpenRouter sometimes proxies an upstream provider error (e.g. Nvidia overloaded) back as a 200 response body with an `error` field instead of `choices` \u2014 handled below so that shows up as a real message, not a JSON.parse crash.",
+      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). OpenRouter sometimes proxies an upstream provider error (e.g. Nvidia overloaded) back as a 200 response body with an `error` field instead of `choices` — handled below so that shows up as a real message, not a JSON.parse crash.",
       "parameters": {
         "jsCode": "const response = $input.first().json;\nlet candidates = [];\nlet errorMessage = null;\nif (response.error) {\n  errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n} else {\n  const text = response.choices?.[0]?.message?.content;\n  if (!text) {\n    errorMessage = 'LLM returned no content (empty response)';\n  } else {\n    try {\n      const cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\n      const parsed = JSON.parse(cleaned);\n      candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n    } catch (e) {\n      errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n    }\n  }\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
       }
@@ -248,7 +248,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1660,
+        3344,
         0
       ],
       "parameters": {
@@ -261,7 +261,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1880,
+        3552,
         0
       ],
       "parameters": {
@@ -295,7 +295,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2100,
+        3776,
         0
       ],
       "parameters": {
@@ -308,7 +308,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2320,
+        4000,
         0
       ],
       "parameters": {
@@ -334,6 +334,183 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.rawBody }}"
+      }
+    },
+    {
+      "id": "ifHasCandidates",
+      "name": "IF: Has Candidates To Enrich",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1552,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.candidates.length }}",
+              "operator": {
+                "operation": "gt",
+                "type": "number"
+              },
+              "rightValue": 0
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "splitCandidates",
+      "name": "Split Out Candidates",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        -150
+      ],
+      "parameters": {
+        "fieldToSplitOut": "candidates",
+        "include": "allOtherFields"
+      }
+    },
+    {
+      "id": "ifHasCompany",
+      "name": "IF: Has Company",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2000,
+        -150
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.company }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "hunterEmailFinder",
+      "name": "Hunter: Email Finder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        -220
+      ],
+      "notes": "Finds a real, verified email for a candidate by company + name. Requires the HUNTER_API_KEY n8n Variable (https://hunter.io) — free tier gives 25 searches/month. Only called when the candidate has a company name, since Hunter requires company or domain to search against.",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.hunter.io/v2/email-finder",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "company",
+              "value": "={{ $json.company }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $json.firstName }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $json.lastName }}"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $vars.HUNTER_API_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "applyHunterResult",
+      "name": "Apply Hunter Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        -220
+      ],
+      "notes": "Only accepts Hunter's email if its own confidence score is >=50 - never fabricates or lowers the bar below what Hunter itself considers reliable.",
+      "parameters": {
+        "jsCode": "const original = $('IF: Has Company').item.json;\nconst res = $input.item.json || {};\nconst data = res.data || {};\nlet email = null;\nif (data.email && typeof data.score === 'number' && data.score >= 50) {\n  email = data.email;\n}\nreturn [{ json: { ...original, email } }];"
+      }
+    },
+    {
+      "id": "mergeEnriched",
+      "name": "Merge Enriched & Skipped",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2672,
+        -150
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
+    },
+    {
+      "id": "aggregateCandidates",
+      "name": "Aggregate Candidates",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2896,
+        -150
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "candidates",
+        "include": "allFieldsExcept",
+        "fieldsToExclude": "icpId,runId,orgId,agentId,errorMessage"
+      }
+    },
+    {
+      "id": "recombineMetadata",
+      "name": "Recombine With Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -150
+      ],
+      "parameters": {
+        "jsCode": "const meta = $('Parse Candidates JSON').first().json;\nconst candidates = $input.first().json.candidates || [];\nreturn [{ json: { icpId: meta.icpId, runId: meta.runId, orgId: meta.orgId, agentId: meta.agentId, candidates, errorMessage: meta.errorMessage } }];"
       }
     }
   ],
@@ -457,7 +634,7 @@
       "main": [
         [
           {
-            "node": "Sign: Report Results",
+            "node": "IF: Has Candidates To Enrich",
             "type": "main",
             "index": 0
           }
@@ -491,6 +668,108 @@
         [
           {
             "node": "POST /agents/:id/runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Candidates To Enrich": {
+      "main": [
+        [
+          {
+            "node": "Split Out Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sign: Report Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Candidates": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Company": {
+      "main": [
+        [
+          {
+            "node": "Hunter: Email Finder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Enriched & Skipped",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Hunter: Email Finder": {
+      "main": [
+        [
+          {
+            "node": "Apply Hunter Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Hunter Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Enriched & Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Enriched & Skipped": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Candidates": {
+      "main": [
+        [
+          {
+            "node": "Recombine With Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recombine With Metadata": {
+      "main": [
+        [
+          {
+            "node": "Sign: Report Results",
             "type": "main",
             "index": 0
           }

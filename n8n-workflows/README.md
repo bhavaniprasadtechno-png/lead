@@ -43,6 +43,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
 | `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as `X-API-KEY` to `google.serper.dev/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data | Agent 8 |
+| `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
 Variables — these are actual API keys, kept out of both `$vars` and the
@@ -203,5 +204,11 @@ Active for the app's automatic calls to reach it.
   silently dropped, just not all of it becomes an actionable lead. It
   grounds candidates in real Serper search results (see the note above);
   a `site:linkedin.com/in` query built from the ICP still won't surface an
-  email on most profile pages, so expect a mix of candidates with and
-  without one — the prompt still refuses to guess an email pattern.
+  email on most profile pages, so after the LLM extracts candidates, a
+  **Hunter: Email Finder** step looks up a real email per candidate by
+  company + name (skipped when the candidate has no company to search
+  against) and only accepts Hunter's own high-confidence result (score
+  ≥ 50) — this raises the leads-created rate but candidates without a
+  company, or where Hunter can't find a confident match, still end up
+  with no email, same as before. Requires the `HUNTER_API_KEY` n8n
+  Variable above.
