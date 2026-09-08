@@ -284,31 +284,61 @@ Active for the app's automatic calls to reach it.
   real person, so the prospector LLM (correctly, per its strict
   no-fabrication rules) had nothing to extract. The query now deliberately
   **excludes** technologies/keywords and instead reads like
-  `"<titles> at a <industries> company in <geographies> - LinkedIn
-  profile, company leadership/team page, or press release naming them"`
-  — natural-language phrasing tuned for Tavily's semantic ranking, aimed
-  at pages that name a specific person. Job titles are the one field
-  worth setting on every ICP regardless: without them the query has
-  nothing pointing at *people* at all.
+  `"<titles> at a <industries> company in <geographies> - named on a
+  company leadership/team/about page, in a press release, or on their
+  LinkedIn profile"` — natural-language phrasing tuned for Tavily's
+  semantic ranking, aimed at pages that name a specific person, and
+  deliberately not LinkedIn-only in its own wording. Job titles are the
+  one field worth setting on every ICP regardless: without them the query
+  has nothing pointing at *people* at all.
 
-  **The LLM needs the company pre-extracted, not just the raw snippet.**
-  Even with good search results (real LinkedIn profile pages naming real
-  people at real, ICP-matching companies), `gemini-3.5-flash-lite`
-  initially still returned zero candidates — it wasn't confidently
-  inferring a person's employer from unstructured scraped profile text
-  (Tavily's LinkedIn scrape is inconsistent: some profiles have a clean
-  `# Name\nCompany\nLocation` header, others don't) and, being a "lite"
-  model, gave up rather than reason it out (a handful of completion
-  tokens, an empty `candidates` array). The fix: **Call LLM (Web Search)**
-  now regex-parses `extractedCompany`/`extractedLocation` directly from
-  each LinkedIn result's header *before* the LLM ever sees it, alongside
-  the raw snippet — shifting the hard part (parsing messy scraped HTML5
-  markdown) to deterministic code and leaving the LLM with only the
-  judgment call (does this company fit the ICP?). This alone fixed it —
-  no system prompt change was needed, since a null `jobTitle` was already
-  a valid field per the existing prompt's own JSON schema; the model just
-  wasn't confident enough to use it without a pre-extracted company to
-  point to.
+  **The LLM needs the company pre-extracted, not just the raw snippet —
+  and that's not a LinkedIn-only problem.** Even with good search results
+  (real LinkedIn profile pages naming real people at real, ICP-matching
+  companies), `gemini-3.5-flash-lite` initially still returned zero
+  candidates — it wasn't confidently inferring a person's employer from
+  unstructured scraped text and, being a "lite" model, gave up rather than
+  reason it out (a handful of completion tokens, an empty `candidates`
+  array). The fix: **Call LLM (Web Search)** regex-parses an
+  `extractedCompany`/`extractedLocation` field directly from each result
+  *before* the LLM ever sees it, alongside the raw snippet — shifting the
+  hard part (parsing messy scraped text) to deterministic code and leaving
+  the LLM with only the judgment call (does this company fit the ICP?).
+  For LinkedIn profile URLs this comes from the page's `# Name\nCompany\n
+  Location` header; for every other result (company team/leadership/about
+  pages, press releases, news articles) it's guessed from the page
+  **title** via a few common patterns (`"X - Leadership"`,
+  `"Leadership - X"`, `"Name - Title | X"`, `"X - Team"`). Without the
+  second half of this, results were skewed almost entirely toward
+  LinkedIn even though Tavily was already returning plenty of non-LinkedIn
+  company pages — the model just wasn't confident enough to extract from
+  them without the same kind of anchor LinkedIn results got. Verified
+  live: a real run surfaced a candidate sourced entirely from a **Forbes
+  article** (no LinkedIn URL at all) alongside the usual LinkedIn matches.
+  None of this needed a system prompt change — a null `jobTitle` was
+  already a valid field per the existing prompt's own JSON schema; the
+  model just wasn't confident enough to use it without a pre-extracted
+  company to point to.
+
+  **One blended query only ever covers a fraction of the ICP — search per
+  job title instead.** Even after the fixes above, a run would often
+  return just one or two candidates despite the ICP listing six job
+  titles: **Build Search Query** used to build a single query from only
+  the *first three* titles, blended together with the industries into one
+  string. One query diluted across several personas at once returns a
+  narrower, less relevant result set than the same personas searched
+  separately — and any titles past the first three were never searched at
+  all. **Build Search Query** now returns one item per job title (capped
+  at 6, to keep Tavily usage bounded — free tier is 1,000 searches/month)
+  instead of one item total; n8n runs **Tavily: Web Search** once per item
+  automatically, and a new **Aggregate Search Results** node merges every
+  response back into one deduped pool (by URL) before **Call LLM (Web
+  Search)** — which still runs exactly once per ICP run, now against the
+  combined results, with its output-token budget raised to 8192 so a
+  larger candidate pool isn't truncated. Verified live: with only 2 titles
+  populated on the test ICP (the fallback default, `Founder`/`CEO` — the
+  real ICP's title list was empty at the time), this alone found 5 real,
+  distinct candidates from a single run, versus 1 before.
 
   **Split Out silently nests its output — always normalize after it.**
   Once real candidates started coming back, reporting them to the app
@@ -338,4 +368,10 @@ Active for the app's automatic calls to reach it.
   just show "No email on file" in the app and skip the auto-send step in
   Agent 3 (`IF: Has Email` gates drafting/sending on a real address being
   present) until someone manually adds contact info. Requires the
-  `HUNTER_API_KEY` n8n Variable above.
+  `HUNTER_API_KEY` n8n Variable above. Note that Hunter's free tier is a
+  much tighter budget than Tavily's (25 lookups/month vs. 1,000 searches)
+  — now that a single ICP run can surface many more candidates than
+  before, it's easy to burn through Hunter's monthly quota in one or two
+  runs. That's expected, not a bug: candidates still get imported as leads
+  either way, just without a verified email once the quota's spent for the
+  month.
