@@ -70,7 +70,7 @@ Authorization: Bearer {{$vars.GOOGLE_AI_API_KEY}}
 content-type: application/json
 
 {
-  "model": "<agent.model from the app, e.g. gemini-2.5-flash>",
+  "model": "<agent.model from the app, e.g. gemma-4-31b-it>",
   "max_tokens": <N>,
   "reasoning_effort": "none",
   "messages": [
@@ -80,34 +80,58 @@ content-type: application/json
 }
 ```
 
-Google AI Studio (the Gemini API) exposes an OpenAI-compatible endpoint
-that accepts this exact request shape and returns this exact response
-shape, which is why swapping providers here only meant changing each "Call
-LLM" node's `url` and `Authorization` header — nothing about the rest of
-the body changed. This differs from Anthropic's Messages API in two ways
-worth knowing if you swap models again later: the system prompt is a
-`role: "system"` message inside the `messages` array (not a separate
-top-level `system` field), and the model's answer comes back as a plain
-string at `response.choices[0].message.content` (not a `content` block
-array).
+`reasoning_effort` is only included when the resolved model is **not**
+Gemma (see below) — every "Call LLM" node builds its body as a single
+JSON expression (`specifyBody: "json"`) precisely so it can add or omit
+that field conditionally, rather than the fixed key/value list a plain
+keypair body would force.
+
+Google AI Studio exposes an OpenAI-compatible endpoint that accepts this
+exact request shape and returns this exact response shape, which is why
+swapping providers here only meant changing each "Call LLM" node's `url`
+and `Authorization` header — nothing about the rest of the body changed.
+This differs from Anthropic's Messages API in two ways worth knowing if
+you swap models again later: the system prompt is a `role: "system"`
+message inside the `messages` array (not a separate top-level `system`
+field), and the model's answer comes back as a plain string at
+`response.choices[0].message.content` (not a `content` block array).
 
 Every current Gemini model (2.5+) does "thinking" by default, which
 consumes `max_tokens` on invisible reasoning before any visible output —
 at the small `max_tokens` budgets these agents use (256–1024), that was
 enough to return an empty/truncated response with nothing to parse.
-`reasoning_effort: "none"` disables it. Separately, Gemini tends to wrap
-JSON replies in ` ```json ... ``` ` fences even when the system prompt
-demands strict JSON, so every "Parse ... JSON" Code node strips a leading/
-trailing fence (`text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')`)
-before `JSON.parse()`s it, rather than trusting any one provider's
-formatting compliance — every agent's system prompt still ends with a
-strict-JSON output instruction, this is just a second line of defense.
+`reasoning_effort: "none"` disables it for Gemini models. Separately,
+every model here tends to wrap JSON replies in ` ```json ... ``` ` fences
+even when the system prompt demands strict JSON, so every "Parse ... JSON"
+Code node strips a leading/trailing fence
+(`text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')`) before
+`JSON.parse()`s it, rather than trusting any one provider's formatting
+compliance — every agent's system prompt still ends with a strict-JSON
+output instruction, this is just a second line of defense.
+
+**Gemma models need different handling than Gemini.** The current default,
+`gemma-4-31b-it`, **rejects** `reasoning_effort` outright (`400: Thinking
+budget is not supported for this model`), so every "Call LLM" node
+detects a Gemma model (`/^gemma/i.test(model)`) and omits that field for
+it entirely. Gemma also doesn't hide its reasoning — it prepends a literal
+`<thought>...</thought>` block to its answer, which can consume the whole
+`max_tokens` budget before any real JSON appears (seen in testing: a
+512-token budget produced 0 completion tokens, all thinking). Every
+"Parse ... JSON" node strips `<thought>...</thought>` before fence-
+stripping, and Gemma's `max_tokens` is floored at 4096 regardless of the
+agent's configured budget to leave room for both the reasoning and the
+answer. **Known issue:** even with these fixes, `gemma-4-31b-it` returned
+a hard `500 Internal error` from Google in roughly half of live test runs
+during development (calls took 40–90s when they did succeed) — every
+"Call LLM" node has `retryOnFail` (3 tries, 2s apart), which helps but
+does not eliminate this. If reliability matters more than using Gemma
+specifically, switch the model back to `gemini-2.5-flash` from the **AI
+Agents** page — it was verified working consistently.
 
 Change the model for any agent from the app's **AI Agents** page (per-org,
-no redeploy needed) — pick any Gemini [model
+no redeploy needed) — pick any Gemini or Gemma [model
 id](https://ai.google.dev/gemini-api/docs/models) Google AI Studio serves
-through that same OpenAI-compatible endpoint, not just the Gemini 2.5
-Flash default. Agent 8 (Prospector) is the one exception to "just an LLM call":
+through that same OpenAI-compatible endpoint. Agent 8 (Prospector) is the one exception to "just an LLM call":
 since Google's OpenAI-compatible endpoint has no hosted web search tool
 (unlike Claude), a **Build Search Query** Code node and a **Serper: Web
 Search** HTTP node run before its "Call LLM" node, and the LLM's user

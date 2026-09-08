@@ -119,27 +119,12 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "={{ (() => { const m = $('GET Agent Prompt (scheduler)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
-            },
-            {
-              "name": "max_tokens",
-              "value": "256"
-            },
-            {
-              "name": "messages",
-              "value": "={{[{role:'system', content: $('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}]}}"
-            },
-            {
-              "name": "reasoning_effort",
-              "value": "none"
-            }
-          ]
-        }
-      }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (scheduler)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: isGemma ? Math.max(256, 4096) : 256, messages: [{role:'system', content: $('GET Agent Prompt (scheduler)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify($('GET Lead').first().json.lead)}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "id": "parseMsg",
@@ -151,7 +136,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
       }
     },
     {

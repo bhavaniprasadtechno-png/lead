@@ -167,27 +167,12 @@
           ]
         },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "model",
-              "value": "={{ (() => { const m = $('GET Agent Prompt (classifier)').first().json.agent.model; return (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-2.5-flash' : m; })() }}"
-            },
-            {
-              "name": "max_tokens",
-              "value": "512"
-            },
-            {
-              "name": "messages",
-              "value": "={{[{role:'system', content: $('GET Agent Prompt (classifier)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ reply: $('Sign: Get Prompt').first().json.replyText })}]}}"
-            },
-            {
-              "name": "reasoning_effort",
-              "value": "none"
-            }
-          ]
-        }
-      }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (classifier)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemma-4-31b-it' : m; const isGemma = /^gemma/i.test(model); const body = { model, max_tokens: isGemma ? Math.max(512, 4096) : 512, messages: [{role:'system', content: $('GET Agent Prompt (classifier)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ reply: $('Sign: Get Prompt').first().json.replyText })}] }; if (!isGemma) body.reasoning_effort = 'none'; return body; })()) }}"
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "id": "parseIntent",
@@ -199,7 +184,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst cleaned = text.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { orgId: $('Sign: Get Prompt').first().json.orgId, leadId: $('Sign: Get Prompt').first().json.lead.id, ...parsed } }];"
       }
     },
     {
