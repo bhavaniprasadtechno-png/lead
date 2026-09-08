@@ -230,6 +230,37 @@
       }
     },
     {
+      "id": "ifHasEmail",
+      "name": "IF: Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        980,
+        150
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$('GET Lead').first().json.lead.email }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        }
+      }
+    },
+    {
       "id": "parseEmail",
       "name": "Parse Email JSON",
       "type": "n8n-nodes-base.code",
@@ -415,7 +446,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
@@ -426,7 +457,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
@@ -437,11 +468,23 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Email)",
+            "node": "IF: Has Email",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "IF: Has Email": {
+      "main": [
+        [
+          {
+            "node": "Call LLM (Draft Email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Call LLM (Draft Email)": {

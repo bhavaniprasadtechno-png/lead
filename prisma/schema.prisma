@@ -100,7 +100,7 @@ model Lead {
   source         LeadSource @default(manual)
   firstName      String     @map("first_name")
   lastName       String?    @map("last_name")
-  email          String
+  email          String?
   phone          String?
   company        String?
   jobTitle       String?    @map("job_title")

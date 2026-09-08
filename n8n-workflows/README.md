@@ -203,19 +203,20 @@ Active for the app's automatic calls to reach it.
   expected 404 for those doesn't fail the run, and an **IF: Lead Found**
   gate right after it skips anything that isn't a tracked lead thread —
   only real lead replies reach the classifier LLM.
-- Agent 8 never fabricates a lead: only candidates with a real, cited
-  email become `Lead` rows (`source = ai_discovery`); every candidate it
-  returns — with or without an email — is still stored on the
-  `LeadDiscoveryRun.candidates` field for review, so nothing found is
-  silently dropped, just not all of it becomes an actionable lead. It
-  grounds candidates in real Serper search results across the **complete
-  web** — not restricted to any one site — pulling 20 results per run (see
-  the note above); most of those pages still won't surface an email
-  directly, so after the LLM extracts candidates, a
-  **Hunter: Email Finder** step looks up a real email per candidate by
-  company + name (skipped when the candidate has no company to search
-  against) and only accepts Hunter's own high-confidence result (score
-  ≥ 50) — this raises the leads-created rate but candidates without a
-  company, or where Hunter can't find a confident match, still end up
-  with no email, same as before. Requires the `HUNTER_API_KEY` n8n
-  Variable above.
+- Agent 8 never fabricates contact info, but every candidate it returns
+  becomes a `Lead` row (`source = ai_discovery`) and shows up on the
+  **Leads** page — with or without a real email — so nothing a search
+  finds is hidden from the app; the full candidate list is also kept on
+  `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
+  Serper search results across the **complete web** — not restricted to
+  any one site — pulling 20 results per run (see the note above); most of
+  those pages still won't surface an email directly, so after the LLM
+  extracts candidates, a **Hunter: Email Finder** step looks up a real
+  email per candidate by company + name (skipped when the candidate has
+  no company to search against) and only accepts Hunter's own
+  high-confidence result (score ≥ 50). Candidates with no company, or
+  where Hunter can't find a confident match, are still imported as leads
+  — they just show "No email on file" in the app and skip the auto-send
+  step in Agent 3 (`IF: Has Email` gates drafting/sending on a real
+  address being present) until someone manually adds contact info.
+  Requires the `HUNTER_API_KEY` n8n Variable above.

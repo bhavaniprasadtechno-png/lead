@@ -36,7 +36,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <dt className="text-slate-500">Email</dt>
-                <dd className="font-medium">{lead.email}</dd>
+                <dd className="font-medium">{lead.email ?? "No email on file"}</dd>
               </div>
               <div>
                 <dt className="text-slate-500">Phone</dt>

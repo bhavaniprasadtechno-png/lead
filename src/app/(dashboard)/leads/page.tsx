@@ -10,7 +10,7 @@ interface Lead {
   id: string;
   firstName: string;
   lastName: string | null;
-  email: string;
+  email: string | null;
   company: string | null;
   jobTitle: string | null;
   status: string;
@@ -101,7 +101,7 @@ export default function LeadsPage() {
                     <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-brand-600">
                       {lead.firstName} {lead.lastName}
                     </Link>
-                    <div className="text-slate-400 text-xs">{lead.email}</div>
+                    <div className="text-slate-400 text-xs">{lead.email ?? "No email on file"}</div>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {lead.company ?? "—"}

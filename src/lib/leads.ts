@@ -12,7 +12,7 @@ export async function createLead(params: {
   orgId: string;
   firstName: string;
   lastName?: string | null;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   company?: string | null;
   jobTitle?: string | null;
@@ -27,7 +27,7 @@ export async function createLead(params: {
       orgId: params.orgId,
       firstName: params.firstName,
       lastName: params.lastName ?? undefined,
-      email: params.email,
+      email: params.email ?? undefined,
       phone: params.phone ?? undefined,
       company: params.company ?? undefined,
       jobTitle: params.jobTitle ?? undefined,

@@ -25,12 +25,13 @@ const schema = z.object({
 
 /**
  * POST /api/icp-profiles/:id/runs/:runId/results
- * Called by the n8n Prospector Agent once Claude's web search finishes.
- * Only candidates with a verifiable email become real Lead records (source
- * = ai_discovery) and re-enter the normal enrichment/scoring pipeline;
- * candidates without one are kept in the run's `candidates` field for
- * visibility but not imported — we never fabricate contact info. Dedupes
- * against existing leads by email within the org.
+ * Called by the n8n Prospector Agent once the web search finishes. Every
+ * candidate becomes a real Lead record (source = ai_discovery) and re-enters
+ * the normal enrichment/scoring pipeline, whether or not a verifiable email
+ * was found — we never fabricate contact info, so leads without one just
+ * show "No email on file" and won't reach the auto-send step. Dedupes
+ * against existing leads by email within the org when an email is present;
+ * candidates without one can't be reliably deduped, so each is imported.
  */
 export async function POST(
   req: Request,
@@ -62,14 +63,14 @@ export async function POST(
     let skippedDuplicate = 0;
 
     for (const candidate of data.candidates) {
-      if (!candidate.email) continue; // no verifiable contact — logged, not imported
-
-      const existing = await prisma.lead.findFirst({
-        where: { orgId: run.orgId, email: { equals: candidate.email, mode: "insensitive" } },
-      });
-      if (existing) {
-        skippedDuplicate++;
-        continue;
+      if (candidate.email) {
+        const existing = await prisma.lead.findFirst({
+          where: { orgId: run.orgId, email: { equals: candidate.email, mode: "insensitive" } },
+        });
+        if (existing) {
+          skippedDuplicate++;
+          continue;
+        }
       }
 
       await createLead({

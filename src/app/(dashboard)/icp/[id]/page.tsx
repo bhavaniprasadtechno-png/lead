@@ -244,8 +244,8 @@ export default function IcpDetailPage() {
         <div className="card p-6 h-fit">
           <h2 className="font-semibold mb-4">Discovered leads</h2>
           <p className="text-sm text-slate-500 mb-3">
-            Candidates with a verifiable email flow into the normal enrichment → scoring → outreach pipeline as
-            regular leads.
+            Every candidate this ICP finds shows up as a lead. Ones with a verified email flow into the normal
+            enrichment → scoring → outreach pipeline; the rest just wait for contact info.
           </p>
           <Link href={`/leads?icpId=${icp.id}`} className="btn-secondary w-full justify-center">
             View leads from this ICP

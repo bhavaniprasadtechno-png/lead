@@ -10,7 +10,7 @@ interface Approval {
   output: any;
   createdAt: string;
   agent: { id: string; name: string; type: string };
-  lead: { id: string; firstName: string; lastName: string | null; email: string } | null;
+  lead: { id: string; firstName: string; lastName: string | null; email: string | null } | null;
 }
 
 export default function ApprovalsPage() {
