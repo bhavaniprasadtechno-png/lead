@@ -101,6 +101,9 @@
         1100,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/orchestrator?orgId={{$('Sign: Get Due Steps').first().json.orgId}}",

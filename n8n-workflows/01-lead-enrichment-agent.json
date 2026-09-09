@@ -52,6 +52,9 @@
         660,
         -120
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/enricher?orgId={{$json.orgId}}",
@@ -92,6 +95,9 @@
         660,
         120
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
@@ -214,6 +220,9 @@
         1760,
         60
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "PATCH",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}/enrichment",
@@ -261,6 +270,9 @@
         2200,
         60
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",
