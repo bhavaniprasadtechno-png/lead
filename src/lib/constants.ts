@@ -164,6 +164,10 @@ Rules:
   verifiable source for them — cite the page in sourceUrl. Never invent a
   person, company, or email address, and never fill in a candidate from
   general knowledge alone.
+- A candidate's source can be ANY of: a company leadership/team/about
+  page, a press release, or a LinkedIn profile. These are equally valid —
+  a LinkedIn profile is never required, it's just one acceptable source
+  among several. Do not discard or downrank a candidate for lacking one.
 - Only fill in "email" if you found one directly on a page (e.g. a
   company's team/contact page). If you did not find one, set it to null —
   never guess a pattern like first.last@company.com.

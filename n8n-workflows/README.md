@@ -271,8 +271,9 @@ Active for the app's automatic calls to reach it.
   **Leads** page — with or without a real email — so nothing a search
   finds is hidden from the app; the full candidate list is also kept on
   `LeadDiscoveryRun.candidates` for audit. It grounds candidates in real
-  Tavily search results, pulling 20 results per run at `search_depth:
-  'advanced'` (see the note above).
+  Tavily search results, pulling up to 20 results per job-title query at
+  `search_depth: 'advanced'` (see "search per job title" and "fetch the
+  maximum" below).
 
   **The search query is aimed at finding named people, not products.**
   An earlier version of **Build Search Query** joined every ICP field
@@ -329,7 +330,7 @@ Active for the app's automatic calls to reach it.
   narrower, less relevant result set than the same personas searched
   separately — and any titles past the first three were never searched at
   all. **Build Search Query** now returns one item per job title (capped
-  at 6, to keep Tavily usage bounded — free tier is 1,000 searches/month)
+  at 10, to keep Tavily usage bounded — free tier is 1,000 searches/month)
   instead of one item total; n8n runs **Tavily: Web Search** once per item
   automatically, and a new **Aggregate Search Results** node merges every
   response back into one deduped pool (by URL) before **Call LLM (Web
@@ -339,6 +340,31 @@ Active for the app's automatic calls to reach it.
   populated on the test ICP (the fallback default, `Founder`/`CEO` — the
   real ICP's title list was empty at the time), this alone found 5 real,
   distinct candidates from a single run, versus 1 before.
+
+  **Fetch the maximum: two more volume knobs, plus LinkedIn is explicitly
+  optional, not required.** Two follow-up changes, made together:
+  - The title cap above went from 6 → 10 and **Tavily: Web Search**'s
+    `max_results` per query went from 15 → 20 — both are safe to raise
+    together because **Aggregate Search Results** already dedupes the
+    combined pool by URL, so a bigger per-query haul doesn't multiply
+    duplicate work for the LLM, just real candidate coverage. Worst case
+    this is 10 Tavily searches per run instead of 6, so a run now costs
+    up to ~1.7x more of the free tier's 1,000 searches/month.
+  - The wording in **Build Search Query**'s query tail and in
+    `DEFAULT_AGENT_PROMPTS.prospector` (`src/lib/constants.ts`) was
+    already functionally an OR across leadership-page / press-release /
+    LinkedIn sources (see "The search query is aimed at finding named
+    people" above) — nothing in code ever required a LinkedIn URL. But
+    since that came up again, both places now spell it out explicitly
+    ("LinkedIn is optional, not required" / "a LinkedIn profile is never
+    required, it's just one acceptable source among several") so the
+    intent isn't just implicit in a permissive OR-phrased sentence.
+    Updating `DEFAULT_AGENT_PROMPTS.prospector` only affects newly-seeded
+    orgs (`/api/auth/register` and `/api/agents/seed-defaults`) — an
+    already-provisioned org's live prospector agent keeps whatever
+    `systemPrompt` is stored in its `Agent` row until someone edits it in
+    the app's **Agents** settings page (`PATCH /api/agents/:id`, session-
+    authenticated only, no n8n/HMAC path).
 
   **Split Out silently nests its output — always normalize after it.**
   Once real candidates started coming back, reporting them to the app
@@ -358,6 +384,23 @@ Active for the app's automatic calls to reach it.
   live: Hunter now actually fires and returns real, verified emails (not
   just candidates with no company skipping it) and the final report to
   the app succeeds.
+
+  **One malformed candidate used to silently strand the entire run.**
+  `POST /icp-profiles/:id/runs/:runId/results` validated `candidates` as a
+  single Zod array — if the model emitted `""` for a not-found `email`
+  instead of the `null` its own prompt asks for (`gemini-3.5-flash-lite`
+  does this occasionally), `z.string().email()` rejected that one
+  candidate and Zod failed the *whole array*, before the run was ever
+  updated. The `LeadDiscoveryRun` stayed at `status: "queued"` forever —
+  not `"failed"` (no code path reached the failure branch) — with **zero**
+  of that run's real candidates ever becoming leads, and no visible error
+  beyond a permanently "queued" badge on the ICP page. Fixed two ways:
+  candidate fields are normalized (blank strings and unparseable emails
+  become `null`, matching what the schema already expects) before
+  validation runs at all, and lead creation now happens per-candidate
+  inside a `try/catch` in the results route so one candidate's DB error
+  can no longer abort the ones after it — the run always ends up
+  `"completed"` with an accurate `leadsCreated`/`leadsSkipped` count.
 
   Most matched pages still won't surface an email directly, so after the
   LLM extracts candidates, **Hunter: Email Finder** looks up a real email
