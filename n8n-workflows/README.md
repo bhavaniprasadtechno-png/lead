@@ -220,6 +220,18 @@ Active for the app's automatic calls to reach it.
   open them in the n8n editor and wire in your real Postmark/Gmail/Cal.com
   credentials — placeholder HTTP Request nodes are included with the
   correct URLs and payload shapes but generic auth.
+- **A node calling the app can fail with a raw HTML "Service unavailable"
+  page instead of JSON — that's Render's cold-start page, not an app
+  bug.** Render's free/starter tier spins the web service down after a
+  period of inactivity; the *next* request (any of these workflows' HTTP
+  Request nodes hitting `$vars.APP_BASE_URL`) has to wait for it to wake
+  back up, and can get Render's own branded "waking up" HTML back if the
+  node doesn't tolerate the delay. `GET /sequences/due` in Agent 6 has
+  `retryOnFail` (5 tries, 5s apart — n8n's per-node maximum) for exactly
+  this reason. If you see the same failure shape (an HTML page with
+  `@font-face`/font declarations in a node's output, "Service unavailable
+  - try again later") on a *different* node, the fix is the same: enable
+  retry on that node, or move the app to a plan that doesn't spin down.
 - **There is no "Apollo" entry in n8n's credential-type picker — that's
   expected, not something to keep searching for.** Apollo.io isn't a
   first-party n8n integration, so it was never going to appear no matter
