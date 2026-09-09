@@ -474,3 +474,95 @@ Active for the app's automatic calls to reach it.
   runs. That's expected, not a bug: candidates still get imported as leads
   either way, just without a verified email once the quota's spent for the
   month.
+
+  **Aggregating every job title's search results into one combined pool
+  before the LLM call was silently starving it — this was the real cause
+  of runs completing with zero candidates.** With the title cap raised to
+  10 and 20 results per title, **Aggregate Search Results** could hand
+  **Call LLM (Web Search)** a single user message built from up to 200
+  search results at once. In production this produced a **~54,795-token
+  prompt**, and `gemini-3.5-flash-lite` came back with an empty
+  `candidates` array on essentially no completion tokens — the model
+  wasn't refusing on the merits, it was choking on the prompt size itself
+  (this is well past what a "lite" model reasons over reliably in one
+  shot, even with an 8192-token output budget). Every run "completed"
+  successfully because nothing actually errored — the LLM call succeeded,
+  returned valid (empty) JSON, and the run reported `0 candidates found`
+  with no visible failure anywhere in the n8n execution log. This is why
+  raising `max_results`/the title cap alone (see "Fetch the maximum"
+  above) didn't help and, past a point, actively hurt.
+
+  Fixed by processing each job title's search results as its own
+  candidate-extraction call instead of merging everything first:
+  - **Aggregate Search Results** was replaced by **Enrich Search
+    Results**, which still does the same per-result `extractedCompany`/
+    `extractedLocation` parsing (see above) but keeps each job title's
+    batch of results as its own separate item instead of flattening every
+    batch into one deduped pool.
+  - **Call LLM (Web Search)** now reads `$json.query`/`$json.results`
+    (the current batch only) instead of a combined pool — n8n's HTTP
+    Request node automatically runs once per input item, so this one node
+    now makes up to 10 smaller, focused LLM calls per run (one per job
+    title) instead of one giant one. Added `onError:
+    continueRegularOutput` so one batch's exhausted-retry failure no
+    longer takes down the other 9 batches' results (matching the pattern
+    already used on **Tavily: Web Search**).
+  - **Parse Candidates JSON** now explicitly processes every input item
+    (`$input.all().map(...)`) and a new **Merge Query Batches** node
+    combines all batches' parsed candidates back into one deduped list
+    (by `sourceUrl`+name+company) before the enrichment/reporting nodes
+    downstream — restoring the single combined candidate list those nodes
+    expect, just built from N small LLM calls instead of one call over
+    everything.
+
+  **A general n8n pitfall worth knowing about, hit twice while building
+  the fix above:** a Code node's default mode is "Run Once for All Items"
+  — but bare `$json` or `$input.first()` inside that mode does not mean
+  "the current item," it silently resolves to **only the first input
+  item**, discarding the rest with no error. This makes a Code node that
+  fans out to N items look like it's processing all of them (no error,
+  plausible-looking single output) while actually only ever touching item
+  0. Both **Parse Candidates JSON** and (during development) **Enrich
+  Search Results** hit this — the fix for a Code node that should act on
+  every item is always `const items = $input.all(); return items.map(item
+  => ...)`, never bare `$json`/`$input.first()`. HTTP Request nodes don't
+  have this problem — they loop per-item automatically — so this only
+  matters for Code nodes.
+
+  **Query wording regression:** the "Fetch the maximum" change above
+  (spelling out that LinkedIn is optional) had accidentally left
+  instructional meta-text — `"found on any of: a company leadership/team/
+  about page, a press release, or (optionally, not required) their
+  LinkedIn profile"` — as part of the literal Tavily search query string,
+  not just the system prompt. That meta-commentary isn't real web content
+  and diluted Tavily's semantic relevance ranking for every query.
+  **Build Search Query**'s query tail is now the shorter, content-focused
+  `"... - leadership team, about us, or press release"`; the fuller
+  "LinkedIn is optional" language stays in `DEFAULT_AGENT_PROMPTS.prospector`
+  where it belongs (an instruction to the LLM, not a search term).
+
+  Verified live end-to-end via n8n's manual execution tool with a real
+  10-job-title ICP: a genuine full run (~92s — a cached/partial run
+  finishes in ~15-22s, which is a useful tell if you ever need to confirm
+  a test execution actually re-ran every node rather than reusing a stale
+  result) correctly fanned out to 10 separate Tavily searches, 10 separate
+  Enrich Search Results batches, and 10 separate small LLM calls, each
+  returning its own parsed candidates, correctly merged into one deduped
+  list by **Merge Query Batches**.
+
+  **Not a bug — a genuine targeting-difficulty finding for narrow ICPs.**
+  Even with all of the above fixed, one specific ICP (niche
+  e-commerce/merchandising job titles, company size capped at 178
+  employees, broad/mixed target industries) still returned zero real
+  candidates across all 10 job-title batches in a verified full run. This
+  traces to the target itself, not the workflow: very small companies
+  rarely publish a public leadership/team page naming someone in a niche
+  functional role, so Tavily has little to find, and the prospector LLM
+  correctly refuses (per its own strict no-fabrication rules) to guess a
+  loosely-related executive is the right person. If an ICP keeps returning
+  zero candidates after this fix, check whether it's this shape of
+  problem before assuming a workflow bug: try broadening job titles to
+  include more common senior fallbacks (e.g. add `Founder`/`CEO`/general
+  `Marketing Manager`/`Operations Manager` alongside the niche titles) and/or
+  raising the company size ceiling — larger companies are far more likely
+  to have a public page naming the specific role you're targeting.
