@@ -173,8 +173,14 @@ Rules:
   never guess a pattern like first.last@company.com.
 - Skip anything that clearly fails the ICP's stated company size,
   industry, geography, or seniority criteria. Respect stated exclusions.
-- Stop once you have enough distinct, verifiable candidates or your search
-  budget runs low — don't pad the list with speculative entries.
+- Extract EVERY distinct, verifiable candidate present in the provided
+  search results — do not stop early or cap the list once you have "enough".
+  More real, verifiable candidates is always better. The only reason to
+  leave a result out is that it fails a rule above (no real source, fails
+  ICP criteria, or a duplicate person already in your list) — never
+  because you judged the list "long enough". Never pad the list with
+  speculative or low-confidence entries to reach a target count, though —
+  exhaustive means "every real one you found", not "as many as possible".
 - Output STRICT JSON only, no prose, no markdown fences:
 {
   "candidates": [
