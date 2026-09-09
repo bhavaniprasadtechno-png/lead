@@ -120,7 +120,7 @@
         120
       ],
       "notesInFlow": true,
-      "notes": "Placeholder endpoint - most orgs won't have a real Apollo/Clearbit credential configured. neverError is set so a missing-credential failure (e.g. \"Api key required\") doesn't kill the whole enrichment run: Normalize Enrichment (LLM) detects a non-data response and treats it as \"no third-party data available\" rather than crashing, so the lead still gets PATCHed (with null enrichment fields) and still proceeds to scoring. Replace with a real Apollo/Clearbit credential to get actual firmographic data.",
+      "notes": "n8n has no built-in \"Apollo\" credential type (it never appears in the credential-type picker no matter what you search - that's not a setup mistake, Apollo.io just isn't a first-party n8n integration). Sends api_key as a plain body parameter instead, sourced from the APOLLO_API_KEY n8n Variable - the same pattern TAVILY_API_KEY/HUNTER_API_KEY/GOOGLE_AI_API_KEY already use (Settings/Overview -> Variables in n8n, not a credential). neverError is set so a missing/invalid key (e.g. \"Api key required\") doesn't kill the whole enrichment run: Normalize Enrichment (LLM) detects a non-data response and treats it as \"no third-party data available\" rather than crashing, so the lead still gets PATCHed (with null enrichment fields) and still proceeds to scoring.",
       "parameters": {
         "method": "POST",
         "url": "https://api.apollo.io/v1/people/match",
@@ -128,13 +128,15 @@
         "bodyParameters": {
           "parameters": [
             {
+              "name": "api_key",
+              "value": "={{$vars.APOLLO_API_KEY}}"
+            },
+            {
               "name": "email",
               "value": "={{$('GET Lead').first().json.lead.email}}"
             }
           ]
         },
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "apolloApi",
         "options": {
           "response": {
             "response": {

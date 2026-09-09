@@ -44,6 +44,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
+| `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
 Variables — these are actual API keys, kept out of both `$vars` and the
@@ -51,7 +52,6 @@ workflow JSON):
 
 | Credential | Used for |
 |---|---|
-| Apollo/Clearbit API | Agent 1 (enrichment) |
 | Postmark/SES | Agent 3 (sending) |
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
@@ -217,20 +217,25 @@ Active for the app's automatic calls to reach it.
 ## Notes
 
 - These JSON files are a faithful **starting point**, not a black box:
-  open them in the n8n editor and wire in your real Apollo/Postmark/Gmail/
-  Cal.com credentials — placeholder HTTP Request nodes are included with
-  the correct URLs and payload shapes but generic auth.
-- **Agent 1's Apollo lookup has no real credential by default, and that's
-  handled, not a bug to fix before things work.** Without a real
-  Apollo/Clearbit credential, `Apollo: Company/Contact Lookup` gets back
-  `{"error": "Api key required"}` — `neverError` on that node stops that
-  from killing the run, and `Normalize Enrichment (LLM)` detects the
-  response isn't real Apollo data (no `person`/`organization` field) and
-  sends the LLM an empty object instead, which its existing prompt already
-  handles correctly ("only pass through fields present in the source
-  payload" → all nulls). The lead still gets PATCHed and still moves on to
-  scoring. Wire in a real Apollo/Clearbit credential to get actual
-  firmographic data instead of nulls.
+  open them in the n8n editor and wire in your real Postmark/Gmail/Cal.com
+  credentials — placeholder HTTP Request nodes are included with the
+  correct URLs and payload shapes but generic auth.
+- **There is no "Apollo" entry in n8n's credential-type picker — that's
+  expected, not something to keep searching for.** Apollo.io isn't a
+  first-party n8n integration, so it was never going to appear no matter
+  what you search when adding a credential. `Apollo: Company/Contact
+  Lookup` doesn't use n8n's credential system at all: it sends `api_key`
+  as a plain body parameter sourced from the `APOLLO_API_KEY` **Variable**
+  (Settings/Overview → Variables in n8n — same place as
+  `TAVILY_API_KEY`/`HUNTER_API_KEY`/`GOOGLE_AI_API_KEY`), not a credential.
+  Without that Variable set, Apollo returns `{"error": "Api key
+  required"}` — `neverError` on that node stops that from killing the
+  run, and `Normalize Enrichment (LLM)` detects the response isn't real
+  Apollo data (no `person`/`organization` field) and sends the LLM an
+  empty object instead, which its existing prompt already handles
+  correctly ("only pass through fields present in the source payload" →
+  all nulls). The lead still gets PATCHed and still moves on to scoring.
+  Set `APOLLO_API_KEY` to get real firmographic data instead of nulls.
 - **A lead's score was never actually being written, in any setup.**
   Agent 2 PATCHes a lead's score to `/api/leads/:id` using the same
   HMAC-signature auth every other n8n→app call uses — but that route only
