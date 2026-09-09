@@ -2,7 +2,7 @@
   "name": "Agent 8 — ICP Lead Prospector",
   "nodes": [
     {
-      "id": "trigger",
+      "id": "5841eb4c-01b2-430a-8370-bb2e4e480c42",
       "name": "Webhook: icp.discover",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -11,19 +11,18 @@
         0
       ],
       "parameters": {
-        "path": "icp.discover",
         "httpMethod": "POST",
-        "responseMode": "onReceived",
+        "path": "icp.discover",
         "options": {}
       }
     },
     {
-      "id": "verify",
+      "id": "1139563f-3e6d-46a8-942d-d40307ef98d4",
       "name": "Verify Signature",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        224,
         0
       ],
       "parameters": {
@@ -31,12 +30,12 @@
       }
     },
     {
-      "id": "signGetPrompt",
+      "id": "57b94e54-582e-41aa-a343-3dc2603e510f",
       "name": "Sign: Get Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        448,
         -160
       ],
       "parameters": {
@@ -44,12 +43,12 @@
       }
     },
     {
-      "id": "getPrompt",
+      "id": "a66725d7-1832-47bb-accd-6c6e660d9c88",
       "name": "GET Agent Prompt (prospector)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        672,
         -160
       ],
       "notes": "Same Render cold-start failure class as GET /sequences/due in Agent 6 -- retryOnFail rides it out instead of aborting the whole run before any searching even starts.",
@@ -57,7 +56,6 @@
       "maxTries": 5,
       "waitBetweenTries": 5000,
       "parameters": {
-        "method": "GET",
         "url": "={{ $vars.APP_BASE_URL }}/api/agents/by-type/prospector?orgId={{ $json.orgId }}",
         "sendHeaders": true,
         "headerParameters": {
@@ -71,55 +69,12 @@
               "value": "={{ $json.timestamp }}"
             }
           ]
-        }
+        },
+        "options": {}
       }
     },
     {
-      "id": "signGetIcp",
-      "name": "Sign: Get ICP",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        440,
-        160
-      ],
-      "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
-      }
-    },
-    {
-      "id": "getIcp",
-      "name": "GET ICP Profile",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        660,
-        160
-      ],
-      "notes": "Same Render cold-start failure class as GET /sequences/due in Agent 6 -- retryOnFail rides it out instead of aborting the whole run before any searching even starts.",
-      "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 5000,
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-signature",
-              "value": "={{ $json.signature }}"
-            },
-            {
-              "name": "x-timestamp",
-              "value": "={{ $json.timestamp }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "combinePromptIcp",
+      "id": "e90140df-4522-4340-a906-3de1987da119",
       "name": "Combine Prompt & ICP",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -134,7 +89,51 @@
       }
     },
     {
-      "id": "buildSearchQuery",
+      "id": "a28f62fc-f994-40d5-9ed4-855844f5bf5c",
+      "name": "Sign: Get ICP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "d184087a-3b98-4ff0-a4df-04b42fa8dd70",
+      "name": "GET ICP Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        160
+      ],
+      "notes": "Same Render cold-start failure class as GET /sequences/due in Agent 6 -- retryOnFail rides it out instead of aborting the whole run before any searching even starts.",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-signature",
+              "value": "={{ $json.signature }}"
+            },
+            {
+              "name": "x-timestamp",
+              "value": "={{ $json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9cbefa19-ffa6-4299-a7b9-0d3eff168cc8",
       "name": "Build Search Query",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -143,11 +142,11 @@
         0
       ],
       "parameters": {
-        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) && icp.jobTitles.length ? icp.jobTitles : ['Founder', 'CEO'];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst industriesPart = industries.slice(0, 4).join(', ');\nconst geoSuffix = geographies.length ? (' in ' + geographies.slice(0, 2).join(' or ')) : '';\n// Explicitly an OR, not an AND: a LinkedIn profile is only one of several\n// acceptable sources, never a requirement. Call LLM (Web Search) below\n// mirrors this by extracting a company from ANY of these result types\n// (see guessCompanyFromTitle), not just LinkedIn ones.\nconst tail = ' - found on any of: a company leadership/team/about page, a press release, or (optionally, not required) their LinkedIn profile';\n// One focused search PER job title (capped at 10 to keep Tavily usage\n// bounded - free tier is 1,000 searches/month) instead of one blended\n// query that only ever covered the first 3 titles: a query diluted across\n// many personas at once finds far fewer distinct real candidates than the\n// same number of titles searched separately. Tavily: Web Search runs once\n// per item n8n produces here, and Aggregate Search Results merges them\n// all back into one pool before the LLM ever sees them.\nconst cappedTitles = titles.slice(0, 10);\nreturn cappedTitles.map(function (title) {\n  var q = title + ' at a ' + (industriesPart || 'B2B') + ' company' + geoSuffix + tail;\n  return { json: { query: q } };\n});"
+        "jsCode": "const icp = $('GET ICP Profile').first().json.icpProfile;\nconst titles = Array.isArray(icp.jobTitles) && icp.jobTitles.length ? icp.jobTitles : ['Founder', 'CEO'];\nconst industries = Array.isArray(icp.industries) ? icp.industries : [];\nconst geographies = Array.isArray(icp.geographies) ? icp.geographies : [];\nconst industriesPart = industries.slice(0, 4).join(', ');\nconst geoSuffix = geographies.length ? (' in ' + geographies.slice(0, 2).join(' or ')) : '';\n// Content-focused, not instructional: these are terms that actually appear\n// on the pages we want (leadership/about/press pages), not meta-commentary\n// about what kind of source is acceptable -- that policy already lives in\n// the LLM's system prompt (DEFAULT_AGENT_PROMPTS.prospector) for its own\n// extraction judgment. An earlier version of this tail (\"found on any of:\n// a company leadership/team/about page, a press release, or (optionally,\n// not required) their LinkedIn profile\") was literal instructional text\n// sent AS the search query -- Tavily has no way to interpret \"optionally,\n// not required\" as anything but more keywords to match against, which\n// diluted results toward generic pages instead of pages naming real people.\nconst tail = ' - leadership team, about us, or press release';\n// One focused search PER job title (capped at 10 to keep Tavily usage\n// bounded - free tier is 1,000 searches/month) instead of one blended\n// query that only ever covered the first 3 titles: a query diluted across\n// many personas at once finds far fewer distinct real candidates than the\n// same number of titles searched separately. Tavily: Web Search runs once\n// per item n8n produces here.\nconst cappedTitles = titles.slice(0, 10);\nreturn cappedTitles.map(function (title) {\n  var q = title + ' at a ' + (industriesPart || 'B2B') + ' company' + geoSuffix + tail;\n  return { json: { query: q } };\n});"
       }
     },
     {
-      "id": "serperSearch",
+      "id": "89f4144b-941d-46a6-8c2b-9625d696a675",
       "name": "Tavily: Web Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -155,7 +154,7 @@
         1000,
         200
       ],
-      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the TAVILY_API_KEY n8n Variable (free tier: 1,000 searches/month, no card - https://tavily.com). Unlike Serper (Google's raw operator syntax), Tavily accepts plain natural-language queries with no site:/OR/parentheses restrictions. Build Search Query fans this out to up to 10 parallel per-item calls (one per job title) -- retryOnFail + onError:continueRegularOutput means one query's transient failure (network blip, momentary rate limit) degrades to that one query contributing zero results (Aggregate Search Results already defaults a missing `results` field to []) instead of the default onError=stopWorkflow aborting the ENTIRE run and discarding the other 9 queries' results too.",
+      "notes": "Grounds the LLM in real search results instead of asking it to answer from training data. Requires the TAVILY_API_KEY n8n Variable (free tier: 1,000 searches/month, no card - https://tavily.com). Unlike Serper (Google's raw operator syntax), Tavily accepts plain natural-language queries with no site:/OR/parentheses restrictions. Build Search Query fans this out to up to 10 parallel per-item calls (one per job title) -- retryOnFail + onError:continueRegularOutput means one query's transient failure (network blip, momentary rate limit) degrades to that one query contributing zero results (Enrich Search Results already defaults a missing `results` field to []) instead of the default onError=stopWorkflow aborting the ENTIRE run and discarding the other 9 queries' results too.",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000,
@@ -179,27 +178,32 @@
     },
     {
       "id": "aggregate-search-results",
-      "name": "Aggregate Search Results",
+      "name": "Enrich Search Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1050,
         200
       ],
-      "notes": "Build Search Query fans out into one item per job title, so Tavily: Web Search runs once per title (n8n's default per-item execution). This node collects all of those responses back into a single deduped result set (by URL) before the LLM ever sees them, so Call LLM (Web Search) still runs exactly once per ICP run against the combined pool.",
+      "notes": "Runs once per query batch (n8n's default per-item execution for Code nodes given N separate input items) and adds an extractedCompany field per result: for LinkedIn profile URLs it's parsed deterministically from the page header (name/company/location lines); for any other result (company team/leadership/about pages, press releases) it's guessed from the page title via a few common patterns (\"X - Leadership\", \"Leadership - X\", \"Name - Title | X\", \"X - Team\"). This gives the model the same kind of reliable anchor for non-LinkedIn sources that fixed the original 0-candidates issue for LinkedIn ones. IMPORTANT: this must use $input.all().map(...) and return one output item per input item -- a Code node's default \"Run Once for All Items\" mode makes bare $json silently resolve to just the FIRST input item, which is exactly the bug that made only 1 of up to 10 query batches ever reach the LLM despite Tavily correctly running all of them (verified live: a full 10-batch run took ~90s vs ~15-20s for the single-batch bug).",
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst seen = new Set();\nconst combined = [];\nfor (var i = 0; i < items.length; i++) {\n  var results = (items[i].json && items[i].json.results) || [];\n  for (var j = 0; j < results.length; j++) {\n    var r = results[j];\n    if (r && r.url && !seen.has(r.url)) {\n      seen.add(r.url);\n      combined.push(r);\n    }\n  }\n}\nreturn [{ json: { results: combined, queryCount: items.length } }];"
+        "jsCode": "const guessCompanyFromTitle = (title) => {\n  if (!title) return null;\n  let mm = title.match(/^(.+?)\\s*[-|]\\s*Leadership(?:\\s*team)?\\s*$/i);\n  if (mm) return mm[1].trim();\n  mm = title.match(/^(?:Leadership|Team)(?:\\s*team)?\\s*[-|]\\s*(.+)$/i);\n  if (mm) return mm[1].trim();\n  mm = title.match(/\\|\\s*([^|]+?)(?:\\s+Leadership)?\\s*$/i);\n  if (mm && mm[1].trim().length > 1) return mm[1].trim();\n  mm = title.match(/^(.+?)\\s*[-|]\\s*(?:Our\\s*)?Team\\s*$/i);\n  if (mm) return mm[1].trim();\n  return null;\n};\nconst items = $input.all();\nreturn items.map(function (item) {\n  const rawResults = (item.json && item.json.results) || [];\n  const enriched = rawResults.map(function (r) {\n    const isLinkedInProfile = /linkedin\\.com\\/in\\//i.test(r.url);\n    let company = null, location = null;\n    if (isLinkedInProfile) {\n      const m2 = (r.content || '').match(/^#\\s*.+\\n([^\\n]+)\\n([^\\n]+)/m);\n      if (m2) { company = m2[1].trim(); location = m2[2].trim(); }\n    } else {\n      company = guessCompanyFromTitle(r.title);\n    }\n    return { title: r.title, link: r.url, isLinkedInProfile, extractedCompany: company, extractedLocation: location, snippet: (r.content || '').slice(0, 1200) };\n  });\n  return { json: { query: item.json.query, results: enriched } };\n});"
       }
     },
     {
-      "id": "callClaude",
+      "id": "034f8505-b7fe-4246-a7de-da1374eaf9dd",
       "name": "Call LLM (Web Search)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1220,
+        1104,
         0
       ],
+      "notes": "Runs once PER job-title query batch (not once over every batch combined) -- an earlier version combined all batches' results into one call and hit a 54,795-token prompt that the model silently gave up on (a 9-token empty {\"candidates\":[]} response), verified via real execution data. Each batch's own ~20 results keeps the prompt to a few thousand tokens, well within the model's effective range.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -218,131 +222,39 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const guessCompanyFromTitle = (title) => { if (!title) return null; let mm = title.match(/^(.+?)\\s*[-|]\\s*Leadership(?:\\s*team)?\\s*$/i); if (mm) return mm[1].trim(); mm = title.match(/^(?:Leadership|Team)(?:\\s*team)?\\s*[-|]\\s*(.+)$/i); if (mm) return mm[1].trim(); mm = title.match(/\\|\\s*([^|]+?)(?:\\s+Leadership)?\\s*$/i); if (mm && mm[1].trim().length > 1) return mm[1].trim(); mm = title.match(/^(.+?)\\s*[-|]\\s*(?:Our\\s*)?Team\\s*$/i); if (mm) return mm[1].trim(); return null; }; const rawResults = $('Aggregate Search Results').first().json.results || []; const enriched = rawResults.map(r => { const isLinkedInProfile = /linkedin\\.com\\/in\\//i.test(r.url); let company = null, location = null; if (isLinkedInProfile) { const m2 = (r.content || '').match(/^#\\s*.+\\n([^\\n]+)\\n([^\\n]+)/m); if (m2) { company = m2[1].trim(); location = m2[2].trim(); } } else { company = guessCompanyFromTitle(r.title); } return { title: r.title, link: r.url, isLinkedInProfile, extractedCompany: company, extractedLocation: location, snippet: (r.content || '').slice(0, 1200) }; }); const queries = $('Build Search Query').all().map(i => i.json.query); const body = { model, max_tokens: 8192, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQueries: queries, searchResults: enriched })}] }; return body; })()) }}"
-      },
-      "notes": "Search results are enriched before reaching the LLM with an extractedCompany field: for LinkedIn profile URLs it's parsed deterministically from the page header (name/company/location lines); for any other result (company team/leadership/about pages, press releases) it's guessed from the page title via a few common patterns (\"X - Leadership\", \"Leadership - X\", \"Name - Title | X\", \"X - Team\"). LinkedIn is never required to extract a candidate - it's one recognized source among several (see the OR wording in Build Search Query's tail string), and this same extraction runs for every result type. Reads from Aggregate Search Results (the combined pool across every job-title query - up to 10 titles x 20 results each as of the latest volume bump, deduped by URL - not a single Tavily call) and uses an 8192 output-token budget so a larger pool doesn't get truncated into fewer candidates than it should find.",
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
+        "jsonBody": "={{ JSON.stringify((() => { const m = $('GET Agent Prompt (prospector)').first().json.agent.model; const model = (!m || /nemotron|openrouter/i.test(m)) ? 'gemini-3.5-flash-lite' : m; const body = { model, max_tokens: 8192, messages: [{role:'system', content: $('GET Agent Prompt (prospector)').first().json.agent.systemPrompt}, {role:'user', content: JSON.stringify({ icp: $('GET ICP Profile').first().json.icpProfile, searchQuery: $json.query, searchResults: $json.results })}] }; return body; })()) }}"
+      }
     },
     {
-      "id": "parseCandidates",
+      "id": "d8a84819-c407-409c-8b89-f87a8b16b58d",
       "name": "Parse Candidates JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
+        1328,
+        0
+      ],
+      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). Like Enrich Search Results, this must use $input.all().map(...) and return one item per batch -- bare $input.first() silently drops every batch after the first in a Code node's default \"Run Once for All Items\" mode.",
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst sig = $('Verify Signature').first().json;\nconst agentId = $('GET Agent Prompt (prospector)').first().json.agent.id;\nreturn items.map(function (item) {\n  const response = item.json;\n  let candidates = [];\n  let errorMessage = null;\n  if (response.error) {\n    errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n  } else {\n    const text = response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content;\n    if (!text) {\n      errorMessage = 'LLM returned no content (empty response)';\n    } else {\n      try {\n        const withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\n        const cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\n        const parsed = JSON.parse(cleaned);\n        candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n      } catch (e) {\n        errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n      }\n    }\n  }\n  return { json: { icpId: sig.icpId, runId: sig.runId, orgId: sig.orgId, agentId: agentId, candidates: candidates, errorMessage: errorMessage } };\n});"
+      }
+    },
+    {
+      "id": "mergeQueryBatches",
+      "name": "Merge Query Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
         1440,
-        0
+        120
       ],
-      "notes": "OpenRouter/OpenAI-style response: the model's answer is a plain string at choices[0].message.content (no block array like Anthropic's format). OpenRouter sometimes proxies an upstream provider error (e.g. Nvidia overloaded) back as a 200 response body with an `error` field instead of `choices` — handled below so that shows up as a real message, not a JSON.parse crash.",
+      "notes": "Combines every job-title query batch's candidates back into one deduped list (by sourceUrl+name+company) before the existing single-report pipeline (IF: Has Candidates To Enrich onward, unchanged). One batch's LLM/parse failure never fails the whole run -- only surfaces as a run-level failure if every single batch failed AND none found candidates.",
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nlet candidates = [];\nlet errorMessage = null;\nif (response.error) {\n  errorMessage = 'LLM call failed: ' + (response.error.message || JSON.stringify(response.error));\n} else {\n  const text = response.choices?.[0]?.message?.content;\n  if (!text) {\n    errorMessage = 'LLM returned no content (empty response)';\n  } else {\n    try {\n      const withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\n      const cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\n      const parsed = JSON.parse(cleaned);\n      candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];\n    } catch (e) {\n      errorMessage = 'Failed to parse LLM response as JSON: ' + e.message;\n    }\n  }\n}\nreturn [{ json: { icpId: $('Verify Signature').first().json.icpId, runId: $('Verify Signature').first().json.runId, orgId: $('Verify Signature').first().json.orgId, agentId: $('GET Agent Prompt (prospector)').first().json.agent.id, candidates, errorMessage } }];"
+        "jsCode": "const items = $input.all();\nconst meta = items[0]?.json || {};\nconst seen = new Set();\nconst combined = [];\nfor (const item of items) {\n  const c = item.json;\n  for (const cand of (c.candidates || [])) {\n    const key = (cand.sourceUrl || '') + '|' + (cand.firstName || '') + '|' + (cand.lastName || '') + '|' + (cand.company || '');\n    if (!seen.has(key)) {\n      seen.add(key);\n      combined.push(cand);\n    }\n  }\n}\n// One query batch's LLM/parse failure never fails the whole run -- only\n// surface a failure if every single batch failed AND none found candidates.\nconst allFailed = items.length > 0 && items.every(i => i.json.errorMessage) && combined.length === 0;\nreturn [{ json: { icpId: meta.icpId, runId: meta.runId, orgId: meta.orgId, agentId: meta.agentId, candidates: combined, errorMessage: allFailed ? items[0].json.errorMessage : null } }];"
       }
     },
     {
-      "id": "signResults",
-      "name": "Sign: Report Results",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3344,
-        0
-      ],
-      "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = p.errorMessage\n  ? { status: 'failed', errorMessage: p.errorMessage }\n  : { status: 'completed', candidates: p.candidates };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
-      }
-    },
-    {
-      "id": "postResults",
-      "name": "POST /icp-profiles/:id/runs/:runId/results",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3552,
-        0
-      ],
-      "notes": "Same Render cold-start failure class as GET /sequences/due in Agent 6 -- without retryOnFail, hitting a cold app here after all the search/extraction work already succeeded would leave the LeadDiscoveryRun stuck forever with real candidates that never got reported.",
-      "retryOnFail": true,
-      "maxTries": 5,
-      "waitBetweenTries": 5000,
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}/runs/{{ $json.runId }}/results",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-signature",
-              "value": "={{ $json.signature }}"
-            },
-            {
-              "name": "x-timestamp",
-              "value": "={{ $json.timestamp }}"
-            },
-            {
-              "name": "content-type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.rawBody }}"
-      }
-    },
-    {
-      "id": "signRunLog",
-      "name": "Sign: Log Run",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3776,
-        0
-      ],
-      "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Candidates JSON').first().json;\nconst body = { input: { icpId: p.icpId }, output: { candidateCount: p.candidates.length }, status: p.errorMessage ? 'failure' : 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { agentId: p.agentId, rawBody, timestamp, signature } }];"
-      }
-    },
-    {
-      "id": "logRun",
-      "name": "POST /agents/:id/runs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        4000,
-        0
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput",
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.APP_BASE_URL }}/api/agents/{{ $json.agentId }}/runs",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-signature",
-              "value": "={{ $json.signature }}"
-            },
-            {
-              "name": "x-timestamp",
-              "value": "={{ $json.timestamp }}"
-            },
-            {
-              "name": "content-type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.rawBody }}"
-      }
-    },
-    {
-      "id": "ifHasCandidates",
+      "id": "9d02b197-d322-45fe-b014-91793a4d10c2",
       "name": "IF: Has Candidates To Enrich",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
@@ -373,7 +285,7 @@
       }
     },
     {
-      "id": "splitCandidates",
+      "id": "56c08cf1-1f9b-40c1-9228-ddc80650c285",
       "name": "Split Out Candidates",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
@@ -401,7 +313,7 @@
       }
     },
     {
-      "id": "ifHasCompany",
+      "id": "4a15b783-5f57-49ab-95da-dfc9cd7ac014",
       "name": "IF: Has Company",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
@@ -432,7 +344,7 @@
       }
     },
     {
-      "id": "hunterEmailFinder",
+      "id": "1ec15bc7-5059-4171-8e12-53d50944aad8",
       "name": "Hunter: Email Finder",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -476,7 +388,7 @@
       }
     },
     {
-      "id": "applyHunterResult",
+      "id": "1aef998b-918e-4c8a-9ecb-f03b111283a7",
       "name": "Apply Hunter Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -490,7 +402,7 @@
       }
     },
     {
-      "id": "mergeEnriched",
+      "id": "9ee38766-ccca-453c-9185-a1ca811aa362",
       "name": "Merge Enriched & Skipped",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -504,7 +416,7 @@
       }
     },
     {
-      "id": "aggregateCandidates",
+      "id": "aea26d91-36c0-4441-af34-3d329f92ab78",
       "name": "Aggregate Candidates",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
@@ -515,12 +427,12 @@
       "parameters": {
         "aggregate": "aggregateAllItemData",
         "destinationFieldName": "candidates",
-        "include": "allFieldsExcept",
-        "fieldsToExclude": "icpId,runId,orgId,agentId,errorMessage"
+        "fieldsToExclude": "icpId,runId,orgId,agentId,errorMessage",
+        "include": "allFieldsExcept"
       }
     },
     {
-      "id": "recombineMetadata",
+      "id": "5c175de1-c96c-4fa6-8c7a-cf99023c1920",
       "name": "Recombine With Metadata",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -530,6 +442,110 @@
       ],
       "parameters": {
         "jsCode": "const meta = $('Parse Candidates JSON').first().json;\nconst candidates = $input.first().json.candidates || [];\nreturn [{ json: { icpId: meta.icpId, runId: meta.runId, orgId: meta.orgId, agentId: meta.agentId, candidates, errorMessage: meta.errorMessage } }];"
+      }
+    },
+    {
+      "id": "184b9207-252a-4288-85ca-a4f6f4c838a4",
+      "name": "Sign: Report Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = p.errorMessage\n  ? { status: 'failed', errorMessage: p.errorMessage }\n  : { status: 'completed', candidates: p.candidates };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "677bc2b7-91c2-4383-8334-f26dac488d53",
+      "name": "POST /icp-profiles/:id/runs/:runId/results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3552,
+        0
+      ],
+      "notes": "Same Render cold-start failure class as GET /sequences/due in Agent 6 -- without retryOnFail, hitting a cold app here after all the search/extraction work already succeeded would leave the LeadDiscoveryRun stuck forever with real candidates that never got reported.",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.APP_BASE_URL }}/api/icp-profiles/{{ $json.icpId }}/runs/{{ $json.runId }}/results",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-signature",
+              "value": "={{ $json.signature }}"
+            },
+            {
+              "name": "x-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rawBody }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "805757dc-9653-4ecd-a614-5c260468ef30",
+      "name": "Sign: Log Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3776,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Candidates JSON').first().json;\nconst body = { input: { icpId: p.icpId }, output: { candidateCount: p.candidates.length }, status: p.errorMessage ? 'failure' : 'success' };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { agentId: p.agentId, rawBody, timestamp, signature } }];"
+      }
+    },
+    {
+      "id": "cfdd4093-9955-4eec-92c8-7afc9aec6b33",
+      "name": "POST /agents/:id/runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4000,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.APP_BASE_URL }}/api/agents/{{ $json.agentId }}/runs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-signature",
+              "value": "={{ $json.signature }}"
+            },
+            {
+              "name": "x-timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.rawBody }}",
+        "options": {}
       }
     }
   ],
@@ -572,22 +588,22 @@
         ]
       ]
     },
-    "Sign: Get ICP": {
+    "GET Agent Prompt (prospector)": {
       "main": [
         [
           {
-            "node": "GET ICP Profile",
+            "node": "Combine Prompt & ICP",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "GET Agent Prompt (prospector)": {
+    "Sign: Get ICP": {
       "main": [
         [
           {
-            "node": "Combine Prompt & ICP",
+            "node": "GET ICP Profile",
             "type": "main",
             "index": 0
           }
@@ -631,14 +647,14 @@
       "main": [
         [
           {
-            "node": "Aggregate Search Results",
+            "node": "Enrich Search Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate Search Results": {
+    "Enrich Search Results": {
       "main": [
         [
           {
@@ -664,40 +680,18 @@
       "main": [
         [
           {
+            "node": "Merge Query Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Query Batches": {
+      "main": [
+        [
+          {
             "node": "IF: Has Candidates To Enrich",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sign: Report Results": {
-      "main": [
-        [
-          {
-            "node": "POST /icp-profiles/:id/runs/:runId/results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "POST /icp-profiles/:id/runs/:runId/results": {
-      "main": [
-        [
-          {
-            "node": "Sign: Log Run",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sign: Log Run": {
-      "main": [
-        [
-          {
-            "node": "POST /agents/:id/runs",
             "type": "main",
             "index": 0
           }
@@ -811,6 +805,39 @@
         [
           {
             "node": "Sign: Report Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign: Report Results": {
+      "main": [
+        [
+          {
+            "node": "POST /icp-profiles/:id/runs/:runId/results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /icp-profiles/:id/runs/:runId/results": {
+      "main": [
+        [
+          {
+            "node": "Sign: Log Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign: Log Run": {
+      "main": [
+        [
+          {
+            "node": "POST /agents/:id/runs",
             "type": "main",
             "index": 0
           }
