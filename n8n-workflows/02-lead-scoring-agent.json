@@ -52,6 +52,9 @@
         660,
         -120
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/scorer?orgId={{$json.orgId}}",
@@ -92,6 +95,9 @@
         660,
         120
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
@@ -179,6 +185,9 @@
         -60
       ],
       "notes": "The app auto-transitions the lead to 'qualified' and fires lead.qualified when score >= threshold \u2014 no extra branching needed here.",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "PATCH",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
@@ -226,6 +235,9 @@
         1980,
         -60
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/{{$json.agentId}}/runs",

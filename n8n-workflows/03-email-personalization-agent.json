@@ -83,6 +83,9 @@
         880,
         -160
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/writer?orgId={{$json.orgId}}",
@@ -123,6 +126,9 @@
         880,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
@@ -163,6 +169,9 @@
         880,
         160
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/email-templates/{{$json.templateId}}",
@@ -323,6 +332,9 @@
         1980,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",

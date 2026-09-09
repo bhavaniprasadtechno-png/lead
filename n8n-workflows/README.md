@@ -220,18 +220,39 @@ Active for the app's automatic calls to reach it.
   open them in the n8n editor and wire in your real Postmark/Gmail/Cal.com
   credentials — placeholder HTTP Request nodes are included with the
   correct URLs and payload shapes but generic auth.
-- **A node calling the app can fail with a raw HTML "Service unavailable"
-  page instead of JSON — that's Render's cold-start page, not an app
-  bug.** Render's free/starter tier spins the web service down after a
-  period of inactivity; the *next* request (any of these workflows' HTTP
+- **A node calling the app can fail with a raw HTML "Bad gateway"/"Service
+  unavailable" page instead of JSON — that's Render's cold-start page, not
+  an app bug.** Render's free/starter tier spins the web service down after
+  a period of inactivity; the *next* request (any of these workflows' HTTP
   Request nodes hitting `$vars.APP_BASE_URL`) has to wait for it to wake
-  back up, and can get Render's own branded "waking up" HTML back if the
-  node doesn't tolerate the delay. `GET /sequences/due` in Agent 6 has
-  `retryOnFail` (5 tries, 5s apart — n8n's per-node maximum) for exactly
-  this reason. If you see the same failure shape (an HTML page with
-  `@font-face`/font declarations in a node's output, "Service unavailable
-  - try again later") on a *different* node, the fix is the same: enable
-  retry on that node, or move the app to a plan that doesn't spin down.
+  back up, and can get Render's own branded error HTML back (a page whose
+  body is literally `@font-face` declarations and CSS variables, "Bad
+  gateway - the service failed to handle your request" or "Service
+  unavailable - try again later") if the node doesn't tolerate the delay.
+  This first surfaced on `GET /sequences/due` in Agent 6, then again on
+  three nodes in Agent 8 — both got `retryOnFail` (5 tries, 5s apart —
+  n8n's per-node maximum) at the time, but every *other* agent's calls
+  to the app (Agents 1, 2, 3, 5, and the orchestrator's prompt-fetch in
+  Agent 6) had the exact same exposure and had simply not hit it yet: any
+  one of them failing mid-run with no retry aborts that entire execution
+  (a lead never gets enriched/scored/emailed, a run's audit log entry
+  never gets written), indistinguishable from a real failure in the n8n
+  UI. **Every HTTP Request node in every workflow that calls
+  `$vars.APP_BASE_URL` now has this same `retryOnFail`/5-tries/5s-apart
+  hardening**, with one deliberate exception: Agent 4's `GET Lead by
+  Thread` already sets `neverError` (needed so an expected 404 for a
+  non-lead-reply email doesn't abort the run — see the note on Agent 4's
+  Gmail trigger below) — `neverError` means the node never throws on a
+  non-2xx response in the first place, so `retryOnFail` would never
+  actually trigger there. A cold-start 502 on that specific node degrades
+  to "no matching lead found" (the reply is silently skipped rather than
+  classified) instead of crashing the run; getting that node to
+  distinguish a real 404 from a transient 502 would need restructuring
+  the error handling, not just adding a retry flag, so it's left as a
+  known gap rather than worked around here. If you see this failure shape
+  on a node not covered above (e.g. a new node you add later), the fix is
+  the same: add `retryOnFail`/`maxTries: 5`/`waitBetweenTries: 5000` to
+  it, or move the app to a Render plan that doesn't spin down.
 - **There is no "Apollo" entry in n8n's credential-type picker — that's
   expected, not something to keep searching for.** Apollo.io isn't a
   first-party n8n integration, so it was never going to appear no matter

@@ -43,6 +43,9 @@
         440,
         -100
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/analytics/overview?orgId={{$json.orgId}}",
@@ -83,6 +86,9 @@
         440,
         100
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/housekeeping?orgId={{$json.orgId}}",

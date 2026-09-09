@@ -35,6 +35,9 @@
         440,
         -100
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/scheduler?orgId={{$json.orgId}}",
@@ -75,6 +78,9 @@
         660,
         100
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/{{$json.leadId}}",
@@ -195,6 +201,9 @@
         0
       ],
       "notes": "In production, prefer a Cal.com/Google Calendar 'booking confirmed' webhook to fire this instead of firing immediately after the invite email \u2014 this models the simpler 'propose a link' flow from the spec.",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",

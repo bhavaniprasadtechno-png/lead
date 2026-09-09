@@ -123,6 +123,9 @@
         880,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/agents/by-type/classifier?orgId={{$json.orgId}}",
@@ -209,6 +212,9 @@
         1760,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "POST",
         "url": "={{$vars.APP_BASE_URL}}/api/webhooks/inbound",
