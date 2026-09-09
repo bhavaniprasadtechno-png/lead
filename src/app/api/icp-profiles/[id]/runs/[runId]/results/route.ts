@@ -4,6 +4,25 @@ import { handleApiError, json, ApiError } from "@/lib/api";
 import { requireN8nSignature } from "@/lib/webhook-auth";
 import { createLead } from "@/lib/leads";
 
+// Normalizes one raw candidate field before validation: the LLM is
+// instructed to use null for "not found" but lite models occasionally emit
+// "" instead. z.string().email() rejects "" (it's not a valid email), and
+// since candidates are validated as one array, a single "" email used to
+// fail the *entire* batch — leaving a run stuck at "queued" forever with
+// none of its candidates ever becoming leads. Coercing blanks (and
+// obviously-invalid emails) to null keeps a messy field from taking every
+// other real candidate in the run down with it.
+function cleanStr(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  return trimmed.length ? trimmed : null;
+}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function cleanEmail(v: unknown): string | null {
+  const s = cleanStr(v);
+  return s && EMAIL_RE.test(s) ? s : null;
+}
+
 const candidateSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().nullable().optional(),
@@ -45,7 +64,25 @@ export async function POST(
     const run = await prisma.leadDiscoveryRun.findFirst({ where: { id: runId, icpId: id } });
     if (!run) throw new ApiError("Discovery run not found", 404);
 
-    const parsed = schema.safeParse(JSON.parse(rawBody || "{}"));
+    const rawParsed = JSON.parse(rawBody || "{}");
+    if (Array.isArray(rawParsed.candidates)) {
+      rawParsed.candidates = rawParsed.candidates
+        .filter((c: unknown) => c && typeof c === "object" && !!cleanStr((c as Record<string, unknown>).firstName))
+        .map((c: Record<string, unknown>) => ({
+          ...c,
+          firstName: cleanStr(c.firstName),
+          lastName: cleanStr(c.lastName),
+          email: cleanEmail(c.email),
+          company: cleanStr(c.company),
+          jobTitle: cleanStr(c.jobTitle),
+          linkedinUrl: cleanStr(c.linkedinUrl),
+          website: cleanStr(c.website),
+          sourceUrl: cleanStr(c.sourceUrl),
+          matchReason: cleanStr(c.matchReason),
+        }));
+    }
+
+    const parsed = schema.safeParse(rawParsed);
     if (!parsed.success) {
       return json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, 422);
     }
@@ -62,31 +99,39 @@ export async function POST(
     let created = 0;
     let skippedDuplicate = 0;
 
+    // Each candidate is created independently — one candidate's DB error
+    // (a bad field, a race on the dedupe check) no longer aborts the loop
+    // and strands every candidate after it. The run still ends up
+    // "completed" with an accurate created/skipped count either way.
     for (const candidate of data.candidates) {
-      if (candidate.email) {
-        const existing = await prisma.lead.findFirst({
-          where: { orgId: run.orgId, email: { equals: candidate.email, mode: "insensitive" } },
-        });
-        if (existing) {
-          skippedDuplicate++;
-          continue;
+      try {
+        if (candidate.email) {
+          const existing = await prisma.lead.findFirst({
+            where: { orgId: run.orgId, email: { equals: candidate.email, mode: "insensitive" } },
+          });
+          if (existing) {
+            skippedDuplicate++;
+            continue;
+          }
         }
-      }
 
-      await createLead({
-        orgId: run.orgId,
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
-        email: candidate.email,
-        company: candidate.company,
-        jobTitle: candidate.jobTitle,
-        linkedinUrl: candidate.linkedinUrl,
-        website: candidate.website,
-        source: "ai_discovery",
-        icpId: id,
-        discoveryRunId: runId,
-      });
-      created++;
+        await createLead({
+          orgId: run.orgId,
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          email: candidate.email,
+          company: candidate.company,
+          jobTitle: candidate.jobTitle,
+          linkedinUrl: candidate.linkedinUrl,
+          website: candidate.website,
+          source: "ai_discovery",
+          icpId: id,
+          discoveryRunId: runId,
+        });
+        created++;
+      } catch (err) {
+        console.error(`[icp-discover] failed to create lead for candidate in run ${runId}`, err);
+      }
     }
 
     const completedRun = await prisma.leadDiscoveryRun.update({
