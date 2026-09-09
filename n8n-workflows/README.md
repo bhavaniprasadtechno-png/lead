@@ -383,6 +383,45 @@ Active for the app's automatic calls to reach it.
     the app's **Agents** settings page (`PATCH /api/agents/:id`, session-
     authenticated only, no n8n/HMAC path).
 
+  **A single transient failure anywhere in the run used to produce zero
+  leads, not fewer leads.** Auditing the full flow end-to-end (after the
+  fan-out above raised parallel Tavily calls per run from 6 to up to 10)
+  found three nodes with no failure tolerance at all, each capable of
+  discarding an entire run's worth of real candidates over one blip:
+  - **GET Agent Prompt (prospector)**, **GET ICP Profile**, and **POST
+    /icp-profiles/:id/runs/:runId/results** had no `retryOnFail` — the
+    same Render cold-start failure class documented for `GET
+    /sequences/due` in Agent 6 (see that section above) applies equally
+    here, and the last of these three is the worst case: hitting a cold
+    app *after* search and extraction already succeeded would strand real
+    candidates that were found but never got reported, with the
+    `LeadDiscoveryRun` stuck at `"queued"` forever. All three now have
+    `retryOnFail` (5 tries, 5s apart — n8n's per-node maximum).
+  - **Tavily: Web Search** had neither `retryOnFail` nor an `onError`
+    override, so it used n8n's default `onError: stopWorkflow`. With the
+    fan-out now at up to 10 parallel per-job-title queries, a single
+    query hitting a transient network error or momentary rate limit
+    didn't just lose that one query's results — n8n's default behavior
+    aborted the *entire* workflow execution, discarding the other 9
+    queries' results too, before **Call LLM (Web Search)** ever ran.
+    Added `retryOnFail` (3 tries, 2s apart, matching the pattern every
+    other external-API call in these workflows already uses) plus
+    `onError: continueRegularOutput`, so a query that still fails after
+    retries just contributes no results for that one title — **Aggregate
+    Search Results** already treats a missing/errored `results` field as
+    `[]` via its existing fallback, so the run degrades gracefully instead
+    of zeroing out.
+  - Separately, the "Stop once you have enough distinct, verifiable
+    candidates... don't pad the list" line in
+    `DEFAULT_AGENT_PROMPTS.prospector` actively told the model to
+    self-limit rather than exhaustively extract every real candidate the
+    search results supported — directly working against "find as many
+    leads as possible". Reworded to extract every distinct, verifiable
+    candidate present, while still forbidding padding the list with
+    speculative entries just to hit a count. Same
+    newly-seeded-orgs-only caveat as above applies to getting this onto
+    an already-provisioned org's live agent.
+
   **Split Out silently nests its output — always normalize after it.**
   Once real candidates started coming back, reporting them to the app
   failed with a `422: Required` from `POST
