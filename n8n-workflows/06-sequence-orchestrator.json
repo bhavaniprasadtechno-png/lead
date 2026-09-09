@@ -44,6 +44,10 @@
         440,
         0
       ],
+      "notes": "Render's free/starter tier spins the app down after inactivity, so this poll (every 30 min) sometimes hits it mid cold-start and gets Render's own \"Service unavailable\" HTML page back instead of JSON. retryOnFail (max node budget: 5 tries, 5s apart) rides out most cold starts instead of failing the whole run.",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/sequences/due?orgId={{$json.orgId}}",
