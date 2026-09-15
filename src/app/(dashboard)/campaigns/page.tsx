@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { PageHeader, EmptyState } from "@/components/ui";
+import { PageHeader, EmptyState, StatusBadge, Modal } from "@/components/ui";
 
 interface Campaign {
   id: string;
@@ -10,18 +10,21 @@ interface Campaign {
   goal: string | null;
   status: string;
   sequences: { id: string }[];
+  totalEnrolled: number;
 }
 
 const STATUS_OPTIONS = ["draft", "active", "paused", "archived"];
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/campaigns");
     const data = await res.json();
     setCampaigns(data.campaigns ?? []);
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -29,18 +32,22 @@ export default function CampaignsPage() {
   }, [load]);
 
   async function setStatus(id: string, status: string) {
-    setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
-    await fetch(`/api/campaigns/${id}`, {
+    const prev = campaigns;
+    setCampaigns((cs) => cs.map((c) => (c.id === id ? { ...c, status } : c)));
+    const res = await fetch(`/api/campaigns/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    if (!res.ok) setCampaigns(prev);
   }
 
   async function remove(id: string) {
-    if (!confirm("Delete this campaign and all its sequences? This can't be undone.")) return;
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
-    await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+    if (!confirm("Delete this campaign, its sequences, and all enrollment history? This can't be undone.")) return;
+    const prev = campaigns;
+    setCampaigns((cs) => cs.filter((c) => c.id !== id));
+    const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+    if (!res.ok) setCampaigns(prev);
   }
 
   return (
@@ -55,20 +62,21 @@ export default function CampaignsPage() {
         }
       />
       <div className="p-8">
-        {campaigns.length === 0 ? (
-          <EmptyState title="No campaigns yet" subtitle="Create one to start building sequences." />
+        {loaded && campaigns.length === 0 ? (
+          <EmptyState
+            title="No campaigns yet"
+            subtitle="Create one, add a sequence, then set it Active — qualified leads enroll automatically."
+          />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {campaigns.map((c) => (
-              <div key={c.id} className="card p-5">
-                <div className="flex items-center justify-between">
+              <div key={c.id} className="card p-5 flex flex-col">
+                <div className="flex items-start justify-between gap-2">
                   <Link href={`/campaigns/${c.id}`} className="font-semibold hover:text-brand-600">
                     {c.name}
                   </Link>
                   <select
-                    className={`badge cursor-pointer border-0 ${
-                      c.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
-                    }`}
+                    className="input !w-auto !py-1 text-xs cursor-pointer"
                     value={c.status}
                     onChange={(e) => setStatus(c.id, e.target.value)}
                   >
@@ -79,9 +87,18 @@ export default function CampaignsPage() {
                     ))}
                   </select>
                 </div>
-                <p className="text-sm text-slate-500 mt-1">{c.goal ?? "No goal set"}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-xs text-slate-400">{c.sequences.length} sequence(s)</p>
+                <p className="text-sm text-slate-500 mt-1 flex-1">{c.goal ?? "No goal set"}</p>
+                <div className="flex items-center gap-2 mt-3">
+                  <StatusBadge status={c.status} />
+                  <span className="text-xs text-slate-400">
+                    {c.sequences.length} sequence{c.sequences.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                  <p className="text-sm">
+                    <span className="font-semibold">{c.totalEnrolled}</span>{" "}
+                    <span className="text-slate-500">lead{c.totalEnrolled === 1 ? "" : "s"} enrolled</span>
+                  </p>
                   <button className="text-xs text-red-600 font-medium hover:underline" onClick={() => remove(c.id)}>
                     Delete
                   </button>
@@ -100,43 +117,52 @@ function NewCampaignModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch("/api/campaigns", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, goal, status: "draft" }),
-    });
-    setSaving(false);
-    onCreated();
-    onClose();
+    setError(null);
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, goal, status: "draft" }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed to create campaign");
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create campaign");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 px-4">
-      <div className="card w-full max-w-md p-6">
-        <h2 className="font-semibold text-lg mb-4">New campaign</h2>
-        <form onSubmit={submit} className="space-y-3">
-          <div>
-            <label className="label">Name</label>
-            <input className="input" required value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Goal</label>
-            <input className="input" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Book demos with mid-market SaaS ops leads" />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? "Creating…" : "Create"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal title="New campaign" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+        <div>
+          <label className="label">Name</label>
+          <input className="input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Q1 outbound — mid-market SaaS" />
+        </div>
+        <div>
+          <label className="label">Goal</label>
+          <input className="input" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Book demos with mid-market SaaS ops leads" />
+        </div>
+        <p className="text-xs text-slate-400">
+          Starts as a draft. Add a sequence, then set it Active from the campaign page so qualified leads start enrolling.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
