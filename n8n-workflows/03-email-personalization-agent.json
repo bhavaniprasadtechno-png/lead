@@ -295,7 +295,21 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body }) }}"
+        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body, MessageStream: 'outbound' }) }}"
+      }
+    },
+    {
+      "id": "checkPostmarkResult",
+      "name": "Check Postmark Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        0
+      ],
+      "notes": "Postmark can return HTTP 200 with a non-zero ErrorCode in its response body (e.g. an inactive recipient) -- checking HTTP status alone isn't enough to know the send actually succeeded.",
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nif (res.ErrorCode !== 0) {\n  throw new Error(`Postmark error ${res.ErrorCode}: ${res.Message}`);\n}\nreturn [{ json: { messageId: res.MessageID } }];"
       }
     },
     {
@@ -308,7 +322,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst messageId = $json.messageId;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body, messageId }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
       }
     },
     {
@@ -495,6 +509,17 @@
       ]
     },
     "Postmark: Send Email": {
+      "main": [
+        [
+          {
+            "node": "Check Postmark Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Postmark Result": {
       "main": [
         [
           {

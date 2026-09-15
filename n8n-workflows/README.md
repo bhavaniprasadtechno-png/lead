@@ -346,6 +346,23 @@ Active for the app's automatic calls to reach it.
   supply a real Postmark account, and flipping the send-enabled switch
   for real customer-facing email is a decision this repo leaves to you,
   not something to flip as a side effect of a code fix.
+
+  **Two follow-up refinements to match Postmark's documented API contract
+  exactly, on top of the fixes above.** Both nodes now explicitly set
+  `MessageStream: 'outbound'` in the request body (Postmark defaults to
+  this if omitted, but being explicit avoids surprises if the account's
+  default stream is ever changed). More importantly, both are now
+  followed by a **Check Postmark Result** node: Postmark's API can return
+  HTTP `200` with a non-zero `ErrorCode` in the response body (e.g. an
+  inactive/suppressed recipient) — checking HTTP status alone, which is
+  all n8n's HTTP Request node does by default, isn't enough to know a
+  send actually succeeded. This node reads `ErrorCode`/`Message` from the
+  response and throws a clear error if `ErrorCode` isn't `0`, so a
+  same-status-but-failed send shows up as a failed execution instead of
+  being silently reported to the app as sent. It also captures Postmark's
+  own `MessageID` (their delivery-tracking id for bounces/opens) into the
+  `email_sent`/`meeting.booked` Activity payload alongside subject/body —
+  visible in the campaigns **Emails** tab.
 - Classifier output with `requires_human_review: true` is written to
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
