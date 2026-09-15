@@ -18,7 +18,7 @@ async function buildCampaignResults(
 ) {
   const leadIds = Array.from(new Set(campaign.sequences.flatMap((s) => s.enrollments.map((e) => e.leadId))));
 
-  const [activityCounts, recentActivity] = leadIds.length
+  const [activityCounts, recentActivity, emails] = leadIds.length
     ? await Promise.all([
         prisma.activity.groupBy({ by: ["type"], where: { leadId: { in: leadIds } }, _count: true }),
         prisma.activity.findMany({
@@ -27,8 +27,18 @@ async function buildCampaignResults(
           take: 30,
           include: { lead: { select: { id: true, firstName: true, lastName: true } } },
         }),
+        // Sent/received emails get their own query (not just a slice of
+        // recentActivity) so a busy campaign's other activity (status
+        // changes, score updates) can't crowd actual email content out of
+        // a dedicated "Emails" view.
+        prisma.activity.findMany({
+          where: { leadId: { in: leadIds }, type: { in: ["email_sent", "email_replied"] } },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+          include: { lead: { select: { id: true, firstName: true, lastName: true } } },
+        }),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const countByType = (type: string) => activityCounts.find((c) => c.type === type)?._count ?? 0;
   const emailsSent = countByType("email_sent");
@@ -63,7 +73,7 @@ async function buildCampaignResults(
     perSequence,
   };
 
-  return { stats, recentActivity };
+  return { stats, recentActivity, emails };
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -75,8 +85,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       include: { sequences: { include: { enrollments: { include: { lead: true } } } } },
     });
     if (!campaign) throw new ApiError("Campaign not found", 404);
-    const { stats, recentActivity } = await buildCampaignResults(campaign);
-    return json({ campaign, stats, recentActivity });
+    const { stats, recentActivity, emails } = await buildCampaignResults(campaign);
+    return json({ campaign, stats, recentActivity, emails });
   } catch (err) {
     return handleApiError(err);
   }
