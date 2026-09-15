@@ -161,7 +161,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Sending Enabled').first().json, timestamp, signature } }];"
       }
     },
     {
@@ -204,7 +204,7 @@
         160
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Verify Signature').first().json, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.`).digest('hex');\nreturn [{ json: { ...$('Sending Enabled').first().json, timestamp, signature } }];"
       }
     },
     {
@@ -311,7 +311,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Verify Signature').first().json.leadId, orgId: $('Verify Signature').first().json.orgId, enrollmentId: $('Verify Signature').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nreturn [{ json: { leadId: $('Sending Enabled').first().json.leadId, orgId: $('Sending Enabled').first().json.orgId, enrollmentId: $('Sending Enabled').first().json.enrollmentId, agentId: $('GET Agent Prompt (writer)').first().json.agent.id, ...parsed } }];"
       }
     },
     {

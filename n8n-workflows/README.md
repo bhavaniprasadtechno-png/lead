@@ -762,3 +762,21 @@ Active for the app's automatic calls to reach it.
   brought back in sync with their live, correct structure (verified node
   counts and connection graphs now match exactly; see each file's own
   `Combine ...` / `Warm Up App` / `Sending Enabled` nodes).
+- **Agent 3 crashed on every single send triggered the normal way (via
+  Agent 6), the moment `SEND_ENABLED` was actually turned on.** Confirmed
+  live the first time a real send was attempted after flipping the flag:
+  execution failed at `Sign: Get Lead` with `Node 'Verify Signature'
+  hasn't been executed`. Root cause: `Sign: Get Lead`, `Sign: Get
+  Template`, and `Parse Email JSON` all hard-referenced
+  `$('Verify Signature').first().json` for `leadId`/`orgId`/`templateId`/
+  `enrollmentId` — but `Verify Signature` only runs on this workflow's
+  webhook entry point (`Webhook: lead.qualified`). Agent 6 invokes Agent 3
+  through the *other* entry point, `Execute Workflow Trigger`, specifically
+  to bypass HMAC verification for this internal n8n-to-n8n call (see that
+  node's own note) — so `Verify Signature` never executes on that path,
+  and every one of those three references threw. This had silently never
+  worked; it stayed invisible the whole time because `SEND_ENABLED` being
+  off short-circuited the workflow before reaching any of them. Fixed by
+  pointing all three at `$('Sending Enabled')` instead — the no-op node
+  immediately after the flag check, which carries the identical
+  `{leadId, orgId, templateId, enrollmentId}` shape on both entry paths.
