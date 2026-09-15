@@ -58,11 +58,13 @@ export async function POST(
 ) {
   try {
     const rawBody = await req.text();
-    await requireN8nSignature(req, rawBody);
+    const { duplicate } = await requireN8nSignature(req, rawBody);
 
     const { id, runId } = await params;
     const run = await prisma.leadDiscoveryRun.findFirst({ where: { id: runId, icpId: id } });
     if (!run) throw new ApiError("Discovery run not found", 404);
+
+    if (duplicate) return json({ run, duplicate: true });
 
     const rawParsed = JSON.parse(rawBody || "{}");
     if (Array.isArray(rawParsed.candidates)) {

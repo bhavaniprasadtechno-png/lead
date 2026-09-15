@@ -84,14 +84,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const rawBody = await req.text();
     const signature = req.headers.get("x-signature");
     let orgId: string | undefined;
+    let duplicate = false;
     if (signature) {
-      await requireN8nSignature(req, rawBody);
+      ({ duplicate } = await requireN8nSignature(req, rawBody));
     } else {
       const session = await requireOrgSession();
       orgId = session.orgId;
     }
 
     const { id } = await params;
+
+    // Must not re-apply: this handler can trigger the n8n lead.qualified
+    // webhook and auto-enrollment below, both of which must never re-fire
+    // for the same signed request (a re-fired lead.qualified would mean a
+    // second, duplicate outreach email sent for the same lead).
+    if (duplicate) {
+      const fresh = await loadLead(orgId, id);
+      return json({ lead: fresh, duplicate: true });
+    }
+
     const existing = await prisma.lead.findFirst({ where: { id, ...(orgId ? { orgId } : {}) } });
     if (!existing) throw new ApiError("Lead not found", 404);
     orgId = orgId ?? existing.orgId;

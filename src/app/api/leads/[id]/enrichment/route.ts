@@ -22,11 +22,18 @@ const schema = z.object({
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const rawBody = await req.text();
-    await requireN8nSignature(req, rawBody);
+    const { duplicate } = await requireN8nSignature(req, rawBody);
 
     const { id } = await params;
     const lead = await prisma.lead.findUnique({ where: { id } });
     if (!lead) throw new ApiError("Lead not found", 404);
+
+    // Must not re-run: this handler also re-triggers the n8n lead.enriched
+    // webhook below, which would fan out into a duplicate Agent 2 run.
+    if (duplicate) {
+      const enrichment = await prisma.leadEnrichment.findUnique({ where: { leadId: id } });
+      return json({ enrichment, duplicate: true });
+    }
 
     const parsed = schema.safeParse(JSON.parse(rawBody || "{}"));
     if (!parsed.success) {

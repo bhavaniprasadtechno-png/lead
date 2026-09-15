@@ -12,8 +12,19 @@ import crypto from "crypto";
  * signature is logged once and only processed once. This matters for
  * mutating requests (POST/PATCH), where n8n's automatic retryOnFail resends
  * the exact same signed request (same timestamp, same signature) if the
- * first attempt's response is lost -- e.g. mid Render free-tier cold start
- * -- and without this guard that retry would double-apply the mutation.
+ * first attempt's response is lost -- e.g. mid Render free-tier cold start,
+ * or simply a slow response the client gave up on even though the server
+ * finished the write -- and without this guard that retry would
+ * double-apply the mutation.
+ *
+ * A replay is reported back as `{ duplicate: true }` rather than thrown as
+ * an error: the retry is expected, harmless (the work was already done on
+ * the first attempt), and n8n has no way to tell "this failed" apart from
+ * "this succeeded but got reported as a failure" -- confirmed live, this
+ * turned a real, successful send into a reported execution failure. Every
+ * caller must check `duplicate` and skip re-applying its mutation (and any
+ * side effects, like re-triggering a chained n8n webhook) when it's true,
+ * returning a plain success response instead.
  *
  * Pass `skipDedupe: true` for read-only GET handlers: replaying a read has
  * no side effects, so there's nothing to protect against, and enforcing
@@ -26,7 +37,7 @@ export async function requireN8nSignature(
   req: Request,
   rawBody: string,
   options?: { skipDedupe?: boolean },
-) {
+): Promise<{ duplicate: boolean }> {
   const secret = process.env.N8N_WEBHOOK_SECRET;
   if (!secret) {
     throw new ApiError("Webhook secret not configured", 500);
@@ -49,12 +60,12 @@ export async function requireN8nSignature(
     throw new ApiError(`Invalid webhook signature (${result.reason})`, 401);
   }
 
-  if (options?.skipDedupe) return;
+  if (options?.skipDedupe) return { duplicate: false };
 
   const dedupeKey = crypto.createHash("sha256").update(`${signature}.${timestamp}`).digest("hex");
   const existing = await prisma.webhookInboundLog.findUnique({ where: { dedupeKey } });
   if (existing?.processed) {
-    throw new ApiError("Duplicate request already processed", 409);
+    return { duplicate: true };
   }
 
   await prisma.webhookInboundLog.upsert({
@@ -62,6 +73,7 @@ export async function requireN8nSignature(
     create: { source: "n8n", dedupeKey, payload: safeJson(rawBody), processed: true },
     update: { processed: true },
   });
+  return { duplicate: false };
 }
 
 function safeJson(raw: string) {

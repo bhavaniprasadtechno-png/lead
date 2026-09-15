@@ -315,48 +315,48 @@
       }
     },
     {
-      "id": "sendEmail",
-      "name": "Postmark: Send Email",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "gmailSendEmail",
+      "name": "Gmail: Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
       "position": [
-        1540,
+        1980,
         0
       ],
-      "notes": "IMPORTANT: was completely unauthenticated (no credential, no token header) despite the old 'predefinedCredentialType'/'postmarkApi' config below implying otherwise -- that credential type was never actually backed by a real credential in this n8n instance (confirmed via list_credentials: zero Postmark credentials ever existed), so it silently had no effect. Also built its body via bodyParameters (n8n's form-encoded/keypair path) while declaring a content-type: application/json header -- the two contradicted each other and Postmark's API would reject the mismatched body regardless of auth. And it never included a From address at all, which Postmark requires (a verified Sender Signature on the account). Fixed all three: a real X-Postmark-Server-Token header sourced from $vars.POSTMARK_SERVER_TOKEN (matching this project's convention for every other third-party API key -- TAVILY_API_KEY, HUNTER_API_KEY, APOLLO_API_KEY, GOOGLE_AI_API_KEY -- rather than n8n's credential store), a real specifyBody:\"json\" body, and From sourced from $vars.POSTMARK_FROM_EMAIL. Both variables must be set by a human in n8n's Variables settings with real values from a verified Postmark account before this can actually send -- see README.",
+      "notes": "Switched from Postmark (blocked by its pending-approval domain restriction -- confirmed live: a real send to a real lead's domain was rejected with ErrorCode 412) to Gmail, reusing the same gmailOAuth2 credential Agent 4 already uses to poll replies. appendAttribution is off so outreach doesn't carry an n8n footer.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EupsvL2cglAZH0nv",
+          "name": "Gmail account"
+        }
+      },
       "parameters": {
-        "method": "POST",
-        "url": "https://api.postmarkapp.com/email",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "content-type",
-              "value": "application/json"
-            },
-            {
-              "name": "X-Postmark-Server-Token",
-              "value": "={{ $vars.POSTMARK_SERVER_TOKEN }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body, MessageStream: 'outbound' }) }}"
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('GET Lead').first().json.lead.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
       }
     },
     {
-      "id": "checkPostmarkResult",
-      "name": "Check Postmark Result",
+      "id": "extractGmailMessageId",
+      "name": "Extract Gmail Message Id",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1650,
+        2090,
         0
       ],
-      "notes": "Postmark can return HTTP 200 with a non-zero ErrorCode in its response body (e.g. an inactive recipient) -- checking HTTP status alone isn't enough to know the send actually succeeded.",
+      "notes": "Gmail's API throws its own error on failure (unlike Postmark, there's no HTTP-200-but-failed edge case to separately check for), so this just reshapes the response into the {messageId} shape Sign: Report Sent already expects.",
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nif (res.ErrorCode !== 0) {\n  throw new Error(`Postmark error ${res.ErrorCode}: ${res.Message}`);\n}\nreturn [{ json: { messageId: res.MessageID } }];"
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id } }];"
       }
     },
     {
@@ -580,25 +580,25 @@
       "main": [
         [
           {
-            "node": "Postmark: Send Email",
+            "node": "Gmail: Send Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Postmark: Send Email": {
+    "Gmail: Send Email": {
       "main": [
         [
           {
-            "node": "Check Postmark Result",
+            "node": "Extract Gmail Message Id",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Postmark Result": {
+    "Extract Gmail Message Id": {
       "main": [
         [
           {

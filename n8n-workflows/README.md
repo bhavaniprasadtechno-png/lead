@@ -780,3 +780,47 @@ Active for the app's automatic calls to reach it.
   pointing all three at `$('Sending Enabled')` instead — the no-op node
   immediately after the flag check, which carries the identical
   `{leadId, orgId, templateId, enrollmentId}` shape on both entry paths.
+- **Outbound send switched from Postmark to Gmail.** Postmark's account is
+  new and pending approval, which restricts it to only sending test emails
+  to addresses on the same domain as the `From` address — confirmed live:
+  a real send to a real discovered lead was rejected with `ErrorCode 412`.
+  Rather than wait on approval, `Postmark: Send Email` (Agent 3) and
+  `Postmark: Send Booking Email` (Agent 5) were both replaced with a
+  **Gmail** node (`resource: message, operation: send`), reusing the same
+  `gmailOAuth2` credential Agent 4 already uses to poll for replies — a
+  free option with a ~500/day send limit and no approval gate, sending
+  from the address already connected to this n8n instance.
+  `appendAttribution` is off so outreach mail doesn't carry an n8n footer.
+  Gmail's API throws its own error on failure (no Postmark-style
+  HTTP-200-but-failed-body case to separately check for), so `Check
+  Postmark Result` was replaced with a small `Extract Gmail Message Id`
+  node that just reshapes `{ id }` into the `{ messageId }` shape
+  `Sign: Report Sent` / `Sign: Report Meeting Offer` already expect.
+  Verified live: a real send to a real lead (`nkapoor@wayfair.com`)
+  produced a genuine Gmail message id with a `SENT` label.
+- **A mutating webhook's retried-and-lost-response replay was reported as
+  a failed execution even though the work had already succeeded.** Found
+  chasing the Gmail send above: `POST /webhooks/inbound` (Agent 3's final
+  step, reporting the send back to the app) returned `409 Duplicate
+  request already processed` on a real run, even though the email had
+  genuinely sent and the app's own idempotency guard (`requireN8nSignature`
+  in `src/lib/webhook-auth.ts`) was doing exactly what it's for: n8n's
+  `retryOnFail` resent the identical signed request after the first
+  attempt's response was lost, and the guard correctly refused to
+  double-apply it — it just reported that refusal as an error (`409`)
+  instead of a success, so a retry that correctly protected the data still
+  showed up as a failed execution. This is the same class of thing
+  documented for Agent 8's results-report POST above, now confirmed live
+  on a real customer-facing send. Fixed at the root: `requireN8nSignature`
+  now returns `{ duplicate: boolean }` instead of throwing on a replay,
+  and every mutating route that calls it (`/api/webhooks/inbound`,
+  `/api/agents/:id/runs`, `/api/leads/:id/activities`,
+  `/api/leads/:id/enrichment`, `/api/icp-profiles/:id/runs/:runId/results`,
+  and the n8n-signed path of `PATCH /api/leads/:id`) checks `duplicate`
+  and returns a plain success response instead of re-running its mutation
+  — critically including skipping any side effect that fires another n8n
+  webhook (`PATCH /api/leads/:id`'s `lead.qualified` trigger and
+  `/enrichment`'s `lead.enriched` trigger), since re-firing either of
+  those on a replay would mean a second, duplicate agent run — for
+  `lead.qualified` specifically, a second outreach email sent to the same
+  lead.
