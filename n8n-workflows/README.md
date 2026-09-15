@@ -824,3 +824,28 @@ Active for the app's automatic calls to reach it.
   those on a replay would mean a second, duplicate agent run — for
   `lead.qualified` specifically, a second outreach email sent to the same
   lead.
+- **The real root cause of the "duplicate" errors above: a Zod schema
+  rejected a value Agent 3 always sends, and the dedupe guard's ordering
+  masked the real error.** Confirmed live, and the consequence was real:
+  the same lead (a genuine Wayfair contact) received **two separate
+  outreach emails within 5 minutes**, sent automatically by Agent 6's
+  normal 30-minute cron, because the send was never successfully recorded
+  and so never stopped looking "due." `POST /api/webhooks/inbound`'s Zod
+  schema declared `nextStepDueAt: z.string().datetime().optional()` —
+  `.optional()` alone only accepts the field being *absent*, not
+  explicitly `null`. Agent 3's `Sign: Report Sent` always sends
+  `nextStepDueAt: null` (correctly — signaling "no more steps due"), which
+  failed validation every time, returning a normal `422` response (not a
+  thrown error, so nothing was logged server-side, which made this hard to
+  spot from logs alone). n8n's `retryOnFail` treated that `422` as a
+  failure and retried with the identical signed request — but
+  `requireN8nSignature` marks a request `processed` *before* the route's
+  own validation and mutation logic runs, so every retry hit the dedupe
+  guard first and returned "duplicate" instead of the real `422`,
+  permanently hiding it and permanently blocking the mutation from ever
+  succeeding. Fixed by making the field `.nullable()` as well as
+  `.optional()`, matching what's actually sent. This is also what actually
+  stops the repeat sends going forward: once the write succeeds,
+  `nextStepDueAt` is correctly persisted as `null`, and `GET
+  /api/sequences/due`'s `{ lte: new Date() }` filter correctly excludes a
+  `null` value, so the enrollment stops being reported as due.
