@@ -304,6 +304,18 @@ Active for the app's automatic calls to reach it.
   expected 404 for those doesn't fail the run, and an **IF: Lead Found**
   gate right after it skips anything that isn't a tracked lead thread —
   only real lead replies reach the classifier LLM.
+- **`Sign: Report Reply` used to send `input.reply` as the literal string
+  `'redacted'` and only forward the classifier's structured output**
+  (intent/confidence/suggested_reply) to `POST /api/webhooks/inbound` —
+  meaning a lead's actual reply text was never persisted anywhere in the
+  app, even though it was already available in-workflow (the same
+  `replyText` value `Sign: Get Prompt` feeds the classifier LLM). There
+  was no way to view what a lead had actually written back, only the AI's
+  classification of it. Fixed by forwarding `replyText` in both `input`
+  and `output`, so it lands in the `email_replied` Activity's `payload`
+  the app already stores and — as of the campaigns "Emails" tab — displays.
+  Replies received before this fix has no `replyText` in their payload;
+  the UI shows a note rather than fabricating content for those.
 - Agent 8 never fabricates contact info, but every candidate it returns
   becomes a `Lead` row (`source = ai_discovery`) and shows up on the
   **Leads** page — with or without a real email — so nothing a search

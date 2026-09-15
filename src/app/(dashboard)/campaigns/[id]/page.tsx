@@ -79,6 +79,7 @@ interface ActivityItem {
   actor: string;
   agentName: string | null;
   createdAt: string;
+  payload: Record<string, unknown> | null;
   lead: { id: string; firstName: string; lastName: string | null };
 }
 
@@ -92,6 +93,7 @@ const TAB_OPTIONS = [
   { id: "overview", label: "Overview" },
   { id: "sequences", label: "Sequences" },
   { id: "leads", label: "Leads" },
+  { id: "emails", label: "Emails" },
   { id: "history", label: "History" },
 ] as const;
 type TabId = (typeof TAB_OPTIONS)[number]["id"];
@@ -108,6 +110,7 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [emails, setEmails] = useState<ActivityItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [tab, setTab] = useState<TabId>("overview");
   const [showModal, setShowModal] = useState(false);
@@ -124,6 +127,7 @@ export default function CampaignDetailPage() {
     setCampaign(campaignData.campaign ?? null);
     setStats(campaignData.stats ?? null);
     setRecentActivity(campaignData.recentActivity ?? []);
+    setEmails(campaignData.emails ?? []);
     setTemplates(templatesData.templates ?? []);
   }, [params.id]);
 
@@ -221,6 +225,7 @@ export default function CampaignDetailPage() {
           />
         )}
         {tab === "leads" && <LeadsTab enrollments={allEnrollments} sequences={campaign.sequences} />}
+        {tab === "emails" && <EmailsTab items={emails} />}
         {tab === "history" && <HistoryTab items={recentActivity} />}
       </div>
 
@@ -463,6 +468,70 @@ function LeadsTab({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function EmailsTab({ items }: { items: ActivityItem[] }) {
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        title="No emails yet"
+        subtitle="Sent emails and replies for this campaign's leads will show up here."
+      />
+    );
+  }
+  return (
+    <div className="space-y-4">
+      {items.map((a) => (
+        <div key={a.id} className="card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className={`badge ${a.type === "email_sent" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                {a.type === "email_sent" ? "Sent" : "Received"}
+              </span>
+              <Link href={`/leads/${a.lead.id}`} className="font-medium hover:text-brand-600">
+                {a.lead.firstName} {a.lead.lastName ?? ""}
+              </Link>
+            </div>
+            <span className="text-xs text-slate-400">{new Date(a.createdAt).toLocaleString()}</span>
+          </div>
+
+          {a.type === "email_sent" ? (
+            <>
+              <div className="font-medium text-sm mb-1">{(a.payload?.subject as string) ?? "(no subject)"}</div>
+              <p className="text-sm text-slate-600 whitespace-pre-wrap">{(a.payload?.body as string) ?? "(no content)"}</p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 mb-2">
+                {typeof a.payload?.intent === "string" && <StatusBadge status={a.payload.intent} />}
+                {typeof a.payload?.confidence === "number" && (
+                  <span className="text-xs text-slate-400">{Math.round(a.payload.confidence * 100)}% confidence</span>
+                )}
+              </div>
+              {typeof a.payload?.replyText === "string" ? (
+                <div>
+                  <div className="text-xs text-slate-500 mb-1">What they wrote</div>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                    {a.payload.replyText}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">
+                  Original message text not captured for this reply (captured for replies received after this feature shipped).
+                </p>
+              )}
+              {typeof a.payload?.suggested_reply === "string" && a.payload.suggested_reply && (
+                <div className="mt-2">
+                  <div className="text-xs text-slate-500 mb-1">AI-suggested response</div>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap">{a.payload.suggested_reply}</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

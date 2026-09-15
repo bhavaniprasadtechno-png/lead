@@ -199,8 +199,9 @@
         1540,
         0
       ],
+      "notes": "IMPORTANT: forwards the lead's actual reply text (replyText, already available in-workflow from Sign: Get Prompt -- the same value fed to the classifier LLM) as part of both input and output. This used to send input.reply as the literal string 'redacted' and only forward the classifier's output, so the lead's actual reply was never persisted anywhere in the app -- there was no way to view what a lead had actually written back, only the AI's classification of it.",
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst body = { event: 'reply.classified', orgId: p.orgId, leadId: p.leadId, agentType: 'classifier', input: { reply: 'redacted' }, output: { intent: p.intent, confidence: p.confidence, suggested_reply: p.suggested_reply }, requiresHumanReview: p.requires_human_review === true };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $json;\nconst replyText = $('Sign: Get Prompt').first().json.replyText;\nconst body = { event: 'reply.classified', orgId: p.orgId, leadId: p.leadId, agentType: 'classifier', input: { reply: replyText }, output: { intent: p.intent, confidence: p.confidence, suggested_reply: p.suggested_reply, replyText: replyText }, requiresHumanReview: p.requires_human_review === true };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { ...p, rawBody, timestamp, signature } }];"
       }
     },
     {
