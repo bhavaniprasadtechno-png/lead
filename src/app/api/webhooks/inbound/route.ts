@@ -12,7 +12,7 @@ const schema = z.object({
   input: z.record(z.string(), z.any()).optional(),
   output: z.record(z.string(), z.any()).optional(),
   requiresHumanReview: z.boolean().default(false),
-  nextStepDueAt: z.string().datetime().optional(),
+  nextStepDueAt: z.string().datetime().nullable().optional(),
 });
 
 /**
