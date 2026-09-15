@@ -462,6 +462,35 @@ Active for the app's automatic calls to reach it.
   just candidates with no company skipping it) and the final report to
   the app succeeds.
 
+  **Every discovery run reported exactly one lead created, no matter how
+  many real candidates were actually found — the root cause was
+  `Normalize Split Candidate` itself.** It's a Code node with no explicit
+  execution mode set, which defaults to "Run Once for All Items," and its
+  code used bare `$json` — the same bug class already documented twice
+  elsewhere in this workflow (`Enrich Search Results`, `Parse Candidates
+  JSON`): in that mode, `$json` silently resolves to only the *first*
+  input item, not "the current item." `Split Out Candidates` correctly
+  split N real candidates into N items, but `Normalize Split Candidate`
+  then threw away all but the first of them, so every node after it (`IF:
+  Has Company`, Hunter enrichment, the merge/aggregate steps) only ever
+  saw 1 candidate — confirmed on a real production execution where 7
+  genuine candidates were found and only 1 (`Mark Agnew`) made it to the
+  final report. Fixed the same way as the other two: rewritten to
+  `$input.all().map(...)` so every split-out candidate survives. `Apply
+  Hunter Result` had the identical risk profile (bare `$input.item` and
+  `$('IF: Has Company').item`, also no explicit mode) and was fixed
+  pre-emptively the same way, paired by index against `$('IF: Has
+  Company').all()`. Verified live: a fresh run correctly carried all 3 of
+  that run's real candidates through every downstream step to the final
+  payload, where a pre-fix run would have carried only 1.
+
+  If you add a new Code node anywhere in this pipeline that needs to
+  touch every item (not just "the first" or "the current"), this is the
+  pitfall to know: n8n's default Code node mode makes `$json`/`$input.first()`/
+  `$input.item` all silently mean *item zero*, with no error to flag the
+  mistake — the fix is always `const items = $input.all(); return
+  items.map(...)`.
+
   **One malformed candidate used to silently strand the entire run.**
   `POST /icp-profiles/:id/runs/:runId/results` validated `candidates` as a
   single Zod array — if the model emitted `""` for a not-found `email`
