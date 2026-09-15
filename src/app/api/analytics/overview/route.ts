@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     const signature = req.headers.get("x-signature");
     let orgId: string;
     if (signature) {
-      await requireN8nSignature(req, "");
+      await requireN8nSignature(req, "", { skipDedupe: true });
       const { searchParams } = new URL(req.url);
       const qOrgId = searchParams.get("orgId");
       if (!qOrgId) throw new ApiError("orgId query param is required", 422);

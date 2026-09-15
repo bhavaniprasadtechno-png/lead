@@ -62,6 +62,53 @@
       }
     },
     {
+      "id": "executeWorkflowTrigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        260
+      ],
+      "notes": "Lets Agent 6 (or any caller) invoke this workflow directly via Execute Workflow, bypassing HMAC verification since it's an internal n8n-to-n8n call. Feeds the same {leadId, orgId, templateId, enrollmentId} shape into IF: Sending Enabled that Verify Signature produces for the webhook path.",
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "leadId" },
+            { "name": "orgId" },
+            { "name": "templateId" },
+            { "name": "enrollmentId" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sendingEnabledNoOp",
+      "name": "Sending Enabled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "combinePromptLeadTemplate",
+      "name": "Combine Prompt, Lead & Template",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3
+      }
+    },
+    {
       "id": "signGetPrompt",
       "name": "Sign: Get Prompt",
       "type": "n8n-nodes-base.code",
@@ -386,7 +433,29 @@
         ]
       ]
     },
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "IF: Sending Enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF: Sending Enabled": {
+      "main": [
+        [
+          {
+            "node": "Sending Enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sending Enabled": {
       "main": [
         [
           {
@@ -404,8 +473,7 @@
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Sign: Get Prompt": {
@@ -445,7 +513,7 @@
       "main": [
         [
           {
-            "node": "IF: Has Email",
+            "node": "Combine Prompt, Lead & Template",
             "type": "main",
             "index": 0
           }
@@ -456,14 +524,25 @@
       "main": [
         [
           {
-            "node": "IF: Has Email",
+            "node": "Combine Prompt, Lead & Template",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
     },
     "GET Template": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt, Lead & Template",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Combine Prompt, Lead & Template": {
       "main": [
         [
           {

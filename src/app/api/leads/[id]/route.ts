@@ -58,7 +58,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const signature = req.headers.get("x-signature");
     let orgId: string | undefined;
     if (signature) {
-      await requireN8nSignature(req, "");
+      await requireN8nSignature(req, "", { skipDedupe: true });
     } else {
       const session = await requireOrgSession();
       orgId = session.orgId;

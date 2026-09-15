@@ -11,7 +11,7 @@ import { requireN8nSignature } from "@/lib/webhook-auth";
  */
 export async function GET(req: Request, { params }: { params: Promise<{ type: string }> }) {
   try {
-    await requireN8nSignature(req, "");
+    await requireN8nSignature(req, "", { skipDedupe: true });
 
     const { type } = await params;
     const { searchParams } = new URL(req.url);
