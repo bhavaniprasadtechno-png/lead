@@ -22,6 +22,32 @@
       }
     },
     {
+      "id": "warmUpApp",
+      "name": "Warm Up App (ride out cold start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Render's free tier spins the app down after ~15 min idle, and its start command runs `prisma db push` before `npm start`, so cold boot can take longer than the 20-25s max retry budget a single n8n node is allowed (5 tries x 5s, both hard-capped). Pinging a cheap page first -- neverError + continueRegularOutput so this never fails the run by itself -- spends a second retry budget absorbing cold-start latency before the real signed API calls (which have their own retry budget) get their turn.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.APP_BASE_URL}}/login",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "signOverview",
       "name": "Sign: Get Overview",
       "type": "n8n-nodes-base.code",
@@ -108,12 +134,26 @@
       }
     },
     {
+      "id": "combineOverviewPrompt",
+      "name": "Combine Overview & Prompt",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition"
+      }
+    },
+    {
       "id": "callClaude",
       "name": "Call LLM (Summarize)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        880,
         0
       ],
       "parameters": {
@@ -146,7 +186,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
+        1100,
         0
       ],
       "parameters": {
@@ -156,6 +196,17 @@
   ],
   "connections": {
     "Cron: Nightly 2am": {
+      "main": [
+        [
+          {
+            "node": "Warm Up App (ride out cold start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warm Up App (ride out cold start)": {
       "main": [
         [
           {
@@ -197,7 +248,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Summarize)",
+            "node": "Combine Overview & Prompt",
             "type": "main",
             "index": 0
           }
@@ -205,6 +256,17 @@
       ]
     },
     "GET Agent Prompt (housekeeping)": {
+      "main": [
+        [
+          {
+            "node": "Combine Overview & Prompt",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Overview & Prompt": {
       "main": [
         [
           {

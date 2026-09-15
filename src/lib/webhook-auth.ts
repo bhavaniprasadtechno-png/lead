@@ -8,10 +8,25 @@ import crypto from "crypto";
  * workflow signs its callback with N8N_WEBHOOK_SECRET the same way the app
  * signs its outbound webhooks (see src/lib/n8n.ts), so this is symmetric.
  *
- * Also enforces idempotency: a request replayed with the same signature is
- * logged once and only processed once.
+ * Also enforces idempotency by default: a request replayed with the same
+ * signature is logged once and only processed once. This matters for
+ * mutating requests (POST/PATCH), where n8n's automatic retryOnFail resends
+ * the exact same signed request (same timestamp, same signature) if the
+ * first attempt's response is lost -- e.g. mid Render free-tier cold start
+ * -- and without this guard that retry would double-apply the mutation.
+ *
+ * Pass `skipDedupe: true` for read-only GET handlers: replaying a read has
+ * no side effects, so there's nothing to protect against, and enforcing
+ * dedupe there actively breaks retries -- a retried GET whose first
+ * response got lost would otherwise be rejected as "already processed"
+ * instead of getting the data it asked for, turning a transient cold-start
+ * hiccup into a hard failure.
  */
-export async function requireN8nSignature(req: Request, rawBody: string) {
+export async function requireN8nSignature(
+  req: Request,
+  rawBody: string,
+  options?: { skipDedupe?: boolean },
+) {
   const secret = process.env.N8N_WEBHOOK_SECRET;
   if (!secret) {
     throw new ApiError("Webhook secret not configured", 500);
@@ -33,6 +48,8 @@ export async function requireN8nSignature(req: Request, rawBody: string) {
   if (!result.valid) {
     throw new ApiError(`Invalid webhook signature (${result.reason})`, 401);
   }
+
+  if (options?.skipDedupe) return;
 
   const dedupeKey = crypto.createHash("sha256").update(`${signature}.${timestamp}`).digest("hex");
   const existing = await prisma.webhookInboundLog.findUnique({ where: { dedupeKey } });

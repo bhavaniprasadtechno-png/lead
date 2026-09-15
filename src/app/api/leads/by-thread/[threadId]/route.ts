@@ -10,7 +10,7 @@ import { requireN8nSignature } from "@/lib/webhook-auth";
  */
 export async function GET(req: Request, { params }: { params: Promise<{ threadId: string }> }) {
   try {
-    await requireN8nSignature(req, "");
+    await requireN8nSignature(req, "", { skipDedupe: true });
     const { threadId } = await params;
 
     const emailLog = await prisma.emailLog.findFirst({

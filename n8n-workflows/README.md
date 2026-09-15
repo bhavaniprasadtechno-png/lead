@@ -697,3 +697,86 @@ Active for the app's automatic calls to reach it.
   `Marketing Manager`/`Operations Manager` alongside the niche titles) and/or
   raising the company size ceiling — larger companies are far more likely
   to have a public page naming the specific role you're targeting.
+- **End-to-end audit across all 8 agents' real execution history found two
+  more systemic bugs, both now fixed.**
+
+  **Agent 6 and Agent 7 were failing on almost every scheduled run** —
+  298/298 recent Agent 6 executions (every 30 min) and 7/7 Agent 7
+  executions (nightly) errored on their first request to the app,
+  `GET /sequences/due` and `GET /analytics/overview` respectively. Root
+  cause: `leadpilot-web` runs on Render's **free** plan, which spins the
+  service down after ~15 min of inactivity, and its start command
+  (`npx prisma db push ... && npm start`) makes cold boot slower than a
+  typical Next.js app. Both these agents run on a fixed schedule with no
+  guarantee of recent app traffic, so by the time their cron fires the app
+  is almost always fully cold — and n8n's own per-node retry budget is
+  hard-capped at 5 tries × 5s (~20-25s total, confirmed via the workflow
+  tooling itself), well short of a real cold boot. A **Warm Up App (ride
+  out cold start)** node was added as the first step in both workflows: a
+  cheap `GET /login` ping (`neverError` + `onError: continueRegularOutput`,
+  so it can never fail the run by itself) that spends a *second* ~20-25s
+  retry budget absorbing cold-start latency before the real signed API
+  call — which still has its own retry budget — gets its turn. This
+  roughly doubles the effective time budget available to ride out a cold
+  start, which n8n's per-node caps don't allow doing any other way.
+  Agent 8 doesn't need this: its webhook is called *by* the app itself (a
+  button click in the ICP UI), so the app is guaranteed to already be warm
+  when that request fires.
+
+  **Separately, the app's replay-protection was incorrectly applied to
+  read-only GET endpoints, not just mutating ones.** `requireN8nSignature`
+  enforces idempotency by design — a request replayed with the same
+  signature+timestamp is rejected as a duplicate — specifically so that
+  n8n's automatic retries of a *mutating* request (POST/PATCH) can't
+  double-apply it. But it was being called the same way from several
+  read-only GET handlers too (`/api/sequences/due`,
+  `/api/analytics/overview`, `/api/agents/by-type/:type`, `/api/leads/:id`
+  GET, `/api/leads/by-thread/:threadId`, `/api/icp-profiles/:id` GET,
+  `/api/email-templates/:id` GET). Since n8n's `retryOnFail` resends the
+  *exact same* signed request on retry (same timestamp, same signature —
+  it doesn't re-run the `Sign:` node), any retry of one of these GETs
+  whose first response got lost — exactly the failure mode a Render
+  cold start produces — was rejected as "Duplicate request already
+  processed" instead of just returning the data again, actively defeating
+  the retry logic that's supposed to ride out cold starts. Reads have no
+  side effects, so there's nothing to protect against: `requireN8nSignature`
+  now takes an optional `{ skipDedupe: true }`, passed from all of the GET
+  call sites above, while every mutating call site keeps full dedupe
+  protection unchanged.
+
+  **The `n8n-workflows/*.json` files in this repo had also drifted from
+  the live, working n8n workflows** — in a way that would reintroduce
+  real bugs if anyone re-imported them fresh. Agents 1, 2, 3, 5, and 7 all
+  had a `Combine ... & ...` **Merge** node added live at some point
+  (correctly waiting for two-or-three parallel branches to complete before
+  continuing) that was never mirrored back into the repo's JSON. For
+  Agent 7 that's cosmetic. For **Agents 2, 3, and 5 it's not**: without
+  the merge node, two (or three, for Agent 3) parallel branches — e.g.
+  `GET Agent Prompt` and `GET Lead` — both fed directly into the same next
+  node, which makes n8n run that node (and everything downstream of it)
+  **once per incoming branch** instead of once. For Agent 2 that means the
+  scoring LLM call and the score PATCH run twice. For Agent 5 — Postmark
+  sends a live email — that means **two duplicate booking emails per
+  interested lead**; Agent 3 would have sent **up to three** duplicate
+  outreach emails per qualified lead. All five workflow JSON files were
+  brought back in sync with their live, correct structure (verified node
+  counts and connection graphs now match exactly; see each file's own
+  `Combine ...` / `Warm Up App` / `Sending Enabled` nodes).
+- **Agent 3 crashed on every single send triggered the normal way (via
+  Agent 6), the moment `SEND_ENABLED` was actually turned on.** Confirmed
+  live the first time a real send was attempted after flipping the flag:
+  execution failed at `Sign: Get Lead` with `Node 'Verify Signature'
+  hasn't been executed`. Root cause: `Sign: Get Lead`, `Sign: Get
+  Template`, and `Parse Email JSON` all hard-referenced
+  `$('Verify Signature').first().json` for `leadId`/`orgId`/`templateId`/
+  `enrollmentId` — but `Verify Signature` only runs on this workflow's
+  webhook entry point (`Webhook: lead.qualified`). Agent 6 invokes Agent 3
+  through the *other* entry point, `Execute Workflow Trigger`, specifically
+  to bypass HMAC verification for this internal n8n-to-n8n call (see that
+  node's own note) — so `Verify Signature` never executes on that path,
+  and every one of those three references threw. This had silently never
+  worked; it stayed invisible the whole time because `SEND_ENABLED` being
+  off short-circuited the workflow before reaching any of them. Fixed by
+  pointing all three at `$('Sending Enabled')` instead — the no-op node
+  immediately after the flag check, which carries the identical
+  `{leadId, orgId, templateId, enrollmentId}` shape on both entry paths.

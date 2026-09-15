@@ -28,7 +28,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const signature = req.headers.get("x-signature");
     let icpProfile;
     if (signature) {
-      await requireN8nSignature(req, "");
+      await requireN8nSignature(req, "", { skipDedupe: true });
       icpProfile = await prisma.icpProfile.findUnique({ where: { id } });
     } else {
       const session = await requireOrgSession();

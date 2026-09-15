@@ -117,6 +117,20 @@
       }
     },
     {
+      "id": "combinePromptEnrichment",
+      "name": "Combine Prompt & Enrichment",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition"
+      }
+    },
+    {
       "id": "apolloLookup",
       "name": "Apollo: Company/Contact Lookup",
       "type": "n8n-nodes-base.httpRequest",
@@ -349,6 +363,17 @@
         ]
       ]
     },
+    "GET Agent Prompt (enricher)": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt & Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "GET Lead": {
       "main": [
         [
@@ -361,6 +386,17 @@
       ]
     },
     "Apollo: Company/Contact Lookup": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt & Enrichment",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Prompt & Enrichment": {
       "main": [
         [
           {

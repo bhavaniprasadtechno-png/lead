@@ -117,12 +117,26 @@
       }
     },
     {
+      "id": "combinePromptLead",
+      "name": "Combine Prompt & Lead",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition"
+      }
+    },
+    {
       "id": "callClaude",
       "name": "Call LLM (Score Lead)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1100,
         0
       ],
       "parameters": {
@@ -318,7 +332,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Score Lead)",
+            "node": "Combine Prompt & Lead",
             "type": "main",
             "index": 0
           }
@@ -326,6 +340,17 @@
       ]
     },
     "GET Lead (+ enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt & Lead",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Prompt & Lead": {
       "main": [
         [
           {

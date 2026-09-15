@@ -100,12 +100,26 @@
       }
     },
     {
+      "id": "combinePromptLead",
+      "name": "Combine Prompt & Lead",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition"
+      }
+    },
+    {
       "id": "callClaude",
       "name": "Call LLM (Draft Booking Msg)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1100,
         0
       ],
       "parameters": {
@@ -285,7 +299,7 @@
       "main": [
         [
           {
-            "node": "Call LLM (Draft Booking Msg)",
+            "node": "Combine Prompt & Lead",
             "type": "main",
             "index": 0
           }
@@ -293,6 +307,17 @@
       ]
     },
     "GET Lead": {
+      "main": [
+        [
+          {
+            "node": "Combine Prompt & Lead",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine Prompt & Lead": {
       "main": [
         [
           {
