@@ -26,7 +26,8 @@ const schema = z.object({
 export async function POST(req: Request) {
   try {
     const rawBody = await req.text();
-    await requireN8nSignature(req, rawBody);
+    const { duplicate } = await requireN8nSignature(req, rawBody);
+    if (duplicate) return json({ ok: true, duplicate: true });
 
     const parsed = schema.safeParse(JSON.parse(rawBody || "{}"));
     if (!parsed.success) {

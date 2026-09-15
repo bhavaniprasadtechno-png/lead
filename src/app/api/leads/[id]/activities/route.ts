@@ -53,7 +53,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const rawBody = await req.text();
     const hasSignature = req.headers.get("x-signature");
     if (hasSignature) {
-      await requireN8nSignature(req, rawBody);
+      const { duplicate } = await requireN8nSignature(req, rawBody);
+      if (duplicate) return json({ ok: true, duplicate: true });
     } else {
       await requireOrgSession();
     }

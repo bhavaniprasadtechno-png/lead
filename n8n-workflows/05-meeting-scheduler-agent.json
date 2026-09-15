@@ -160,48 +160,48 @@
       }
     },
     {
-      "id": "sendEmail",
-      "name": "Postmark: Send Booking Email",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "gmailSendBookingEmail",
+      "name": "Gmail: Send Booking Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
       "position": [
-        1320,
+        1540,
         0
       ],
-      "notes": "IMPORTANT: was completely unauthenticated (no credential, no token header, no content-type header at all) -- the 'predefinedCredentialType'/'postmarkApi' config below was never backed by a real credential in this n8n instance and had no effect. Also built its body via bodyParameters (form-encoded) instead of a real JSON body, and never included a From address, which Postmark requires. Same fix as Agent 3's Postmark node -- see its note for the full explanation.",
+      "notes": "Switched from Postmark (blocked by its pending-approval domain restriction) to Gmail, reusing the same gmailOAuth2 credential Agent 4 already uses to poll replies.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EupsvL2cglAZH0nv",
+          "name": "Gmail account"
+        }
+      },
       "parameters": {
-        "method": "POST",
-        "url": "https://api.postmarkapp.com/email",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "content-type",
-              "value": "application/json"
-            },
-            {
-              "name": "X-Postmark-Server-Token",
-              "value": "={{ $vars.POSTMARK_SERVER_TOKEN }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body, MessageStream: 'outbound' }) }}"
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('GET Lead').first().json.lead.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
       }
     },
     {
-      "id": "checkPostmarkResult",
-      "name": "Check Postmark Result",
+      "id": "extractGmailMessageId",
+      "name": "Extract Gmail Message Id",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1430,
+        1650,
         0
       ],
-      "notes": "Postmark can return HTTP 200 with a non-zero ErrorCode in its response body (e.g. an inactive recipient) -- checking HTTP status alone isn't enough to know the send actually succeeded.",
+      "notes": "Gmail's API throws its own error on failure, so this just reshapes the response into the {messageId} shape Sign: Report Meeting Offer already expects.",
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nif (res.ErrorCode !== 0) {\n  throw new Error(`Postmark error ${res.ErrorCode}: ${res.Message}`);\n}\nreturn [{ json: { messageId: res.MessageID } }];"
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id } }];"
       }
     },
     {
@@ -343,25 +343,25 @@
       "main": [
         [
           {
-            "node": "Postmark: Send Booking Email",
+            "node": "Gmail: Send Booking Email",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Postmark: Send Booking Email": {
+    "Gmail: Send Booking Email": {
       "main": [
         [
           {
-            "node": "Check Postmark Result",
+            "node": "Extract Gmail Message Id",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Postmark Result": {
+    "Extract Gmail Message Id": {
       "main": [
         [
           {
