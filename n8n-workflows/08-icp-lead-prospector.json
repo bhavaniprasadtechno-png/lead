@@ -307,9 +307,9 @@
         1888,
         -150
       ],
-      "notes": "Split Out (previous node) nests each split element under its original field name (candidates) instead of flattening it, so { firstName, company, ... } arrives here as { candidates: { firstName, company, ... } }. That silently broke IF: Has Company (checking a field that no longer existed at top level) and corrupted the final payload sent to the app (422 Required). This unwraps it back to a flat candidate object.",
+      "notes": "Split Out (previous node) nests each split element under its original field name (candidates) instead of flattening it, so { firstName, company, ... } arrives here as { candidates: { firstName, company, ... } }. That silently broke IF: Has Company (checking a field that no longer existed at top level) and corrupted the final payload sent to the app (422 Required). This unwraps it back to a flat candidate object. IMPORTANT: this must use $input.all().map(...) -- a Code node's default \"Run Once for All Items\" mode makes bare $json silently resolve to just the FIRST input item, which is exactly the bug that made every discovery run report exactly 1 lead created regardless of how many real candidates Split Out Candidates actually produced (verified live: execution 753 confirmed 7 candidates surviving end to end after this fix, vs 1 before).",
       "parameters": {
-        "jsCode": "const item = $json;\nconst candidate = (item && typeof item === 'object' && item.candidates && typeof item.candidates === 'object' && !Array.isArray(item.candidates)) ? item.candidates : item;\nreturn [{ json: candidate }];"
+        "jsCode": "const items = $input.all();\nreturn items.map(function (item) {\n  const raw = item.json;\n  const candidate = (raw && typeof raw === 'object' && raw.candidates && typeof raw.candidates === 'object' && !Array.isArray(raw.candidates)) ? raw.candidates : raw;\n  return { json: candidate };\n});"
       }
     },
     {
@@ -396,9 +396,9 @@
         2448,
         -220
       ],
-      "notes": "Only accepts Hunter's email if its own confidence score is >=50 - never fabricates or lowers the bar below what Hunter itself considers reliable.",
+      "notes": "Only accepts Hunter's email if its own confidence score is >=50 - never fabricates or lowers the bar below what Hunter itself considers reliable. IMPORTANT: this must use $input.all().map(...), paired by index against $('IF: Has Company').all() -- like Normalize Split Candidate, the previous version's bare $input.item/$('IF: Has Company').item had no explicit \"Run Once for Each Item\" mode set, carrying the same only-processes-item-0 risk. Fixed pre-emptively alongside the confirmed Normalize Split Candidate bug.",
       "parameters": {
-        "jsCode": "const original = $('IF: Has Company').item.json;\nconst res = $input.item.json || {};\nconst data = res.data || {};\nlet email = null;\nif (data.email && typeof data.score === 'number' && data.score >= 50) {\n  email = data.email;\n}\nreturn [{ json: { ...original, email } }];"
+        "jsCode": "const items = $input.all();\nconst originals = $('IF: Has Company').all();\nreturn items.map(function (item, i) {\n  const original = (originals[i] && originals[i].json) || {};\n  const res = item.json || {};\n  const data = res.data || {};\n  let email = null;\n  if (data.email && typeof data.score === 'number' && data.score >= 50) {\n    email = data.email;\n  }\n  return { json: { ...original, email } };\n});"
       }
     },
     {
