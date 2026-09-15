@@ -154,28 +154,26 @@
         1320,
         0
       ],
+      "notes": "IMPORTANT: was completely unauthenticated (no credential, no token header, no content-type header at all) -- the 'predefinedCredentialType'/'postmarkApi' config below was never backed by a real credential in this n8n instance and had no effect. Also built its body via bodyParameters (form-encoded) instead of a real JSON body, and never included a From address, which Postmark requires. Same fix as Agent 3's Postmark node -- see its note for the full explanation.",
       "parameters": {
         "method": "POST",
         "url": "https://api.postmarkapp.com/email",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "postmarkApi",
-        "sendBody": true,
-        "bodyParameters": {
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "To",
-              "value": "={{$('GET Lead').first().json.lead.email}}"
+              "name": "content-type",
+              "value": "application/json"
             },
             {
-              "name": "Subject",
-              "value": "={{$json.subject}}"
-            },
-            {
-              "name": "TextBody",
-              "value": "={{$json.body}}"
+              "name": "X-Postmark-Server-Token",
+              "value": "={{ $vars.POSTMARK_SERVER_TOKEN }}"
             }
           ]
-        }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body }) }}"
       }
     },
     {

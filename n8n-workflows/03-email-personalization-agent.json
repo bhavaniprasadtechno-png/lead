@@ -276,7 +276,7 @@
         1540,
         0
       ],
-      "notes": "Replace with your Postmark/SES credential.",
+      "notes": "IMPORTANT: was completely unauthenticated (no credential, no token header) despite the old 'predefinedCredentialType'/'postmarkApi' config below implying otherwise -- that credential type was never actually backed by a real credential in this n8n instance (confirmed via list_credentials: zero Postmark credentials ever existed), so it silently had no effect. Also built its body via bodyParameters (n8n's form-encoded/keypair path) while declaring a content-type: application/json header -- the two contradicted each other and Postmark's API would reject the mismatched body regardless of auth. And it never included a From address at all, which Postmark requires (a verified Sender Signature on the account). Fixed all three: a real X-Postmark-Server-Token header sourced from $vars.POSTMARK_SERVER_TOKEN (matching this project's convention for every other third-party API key -- TAVILY_API_KEY, HUNTER_API_KEY, APOLLO_API_KEY, GOOGLE_AI_API_KEY -- rather than n8n's credential store), a real specifyBody:\"json\" body, and From sourced from $vars.POSTMARK_FROM_EMAIL. Both variables must be set by a human in n8n's Variables settings with real values from a verified Postmark account before this can actually send -- see README.",
       "parameters": {
         "method": "POST",
         "url": "https://api.postmarkapp.com/email",
@@ -286,28 +286,16 @@
             {
               "name": "content-type",
               "value": "application/json"
+            },
+            {
+              "name": "X-Postmark-Server-Token",
+              "value": "={{ $vars.POSTMARK_SERVER_TOKEN }}"
             }
           ]
         },
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "postmarkApi",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "To",
-              "value": "={{$('GET Lead').first().json.lead.email}}"
-            },
-            {
-              "name": "Subject",
-              "value": "={{$json.subject}}"
-            },
-            {
-              "name": "TextBody",
-              "value": "={{$json.body}}"
-            }
-          ]
-        }
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ From: $vars.POSTMARK_FROM_EMAIL, To: $('GET Lead').first().json.lead.email, Subject: $json.subject, TextBody: $json.body }) }}"
       }
     },
     {

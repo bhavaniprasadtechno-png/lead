@@ -45,6 +45,8 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
+| `POSTMARK_SERVER_TOKEN` | Your [Postmark](https://postmarkapp.com) Server API Token (Servers → your server → API Tokens) — sent as the `X-Postmark-Server-Token` header on `api.postmarkapp.com/email`. **Not a credential** — same pattern as `TAVILY_API_KEY`/`APOLLO_API_KEY`/etc above, a plain Variable | Agents 3, 5 |
+| `POSTMARK_FROM_EMAIL` | The email address every outbound email is sent **from** — must be a [verified Sender Signature](https://postmarkapp.com/support/article/1046-how-do-i-add-a-verified-sender-signature) on your Postmark account, or Postmark rejects the send outright | Agents 3, 5 |
 
 Separately, in n8n's **credential store** (Settings → Credentials, not
 Variables — these are actual API keys, kept out of both `$vars` and the
@@ -52,9 +54,15 @@ workflow JSON):
 
 | Credential | Used for |
 |---|---|
-| Postmark/SES | Agent 3 (sending) |
 | Gmail/Microsoft Graph | Agent 4 (reply capture) |
 | Cal.com / Google Calendar | Agent 5 (scheduling) |
+
+(Postmark is **not** in this list — despite an earlier version of these
+workflows referencing a `postmarkApi` predefined credential type, no
+Postmark credential was ever actually created in this n8n instance, so
+that config silently did nothing. It's now a plain `$vars` Variable pair
+above, same as every other third-party API key here — no n8n credential
+needed.)
 
 Every LLM call goes through Google AI Studio's OpenAI-compatible
 `/chat/completions` API instead of a dedicated n8n credential type —
@@ -294,6 +302,50 @@ Active for the app's automatic calls to reach it.
   built to enforce the daily-send-cap / feature-flag pattern from the spec:
   gate the "Send Email" node behind an `IF` node reading a `SEND_ENABLED`
   environment variable in n8n until deliverability is validated.
+
+  **"Emails aren't sending" was two separate, real bugs — not just the
+  `SEND_ENABLED` flag being off (which was working as intended).**
+  Auditing every recent Agent 3 execution showed all of them (36/36)
+  finishing in under 50ms, having done nothing beyond evaluate `IF:
+  Sending Enabled` and dead-end on its false branch — confirming
+  `$vars.SEND_ENABLED` genuinely wasn't `"true"` in production. That part
+  is the deliberate safety gate doing its job, not a bug: this repo
+  intentionally ships with sending off until you've validated
+  deliverability, per the spec.
+
+  But auditing what happens *if* that flag were flipped on found the
+  "Postmark: Send Email" (Agent 3) and "Postmark: Send Booking Email"
+  (Agent 5) nodes were never actually wired to a working email provider,
+  despite looking configured:
+  - Both referenced a `predefinedCredentialType`/`postmarkApi` n8n
+    credential — but **no Postmark credential was ever created in this
+    n8n instance** (confirmed via the credentials list, count: 0), so
+    that config silently did nothing; the request went out with zero
+    authentication and Postmark would have rejected it with `401`.
+  - Both built their body via `bodyParameters` (n8n's form-encoded/keypair
+    body type) while declaring `content-type: application/json` — the
+    declared content type and the actual body encoding contradicted each
+    other, which Postmark's API would reject regardless of
+    authentication. Every other JSON API call in these workflows uses
+    `specifyBody: "json"` + a `jsonBody` expression instead; these two
+    nodes were the only ones that didn't.
+  - Neither ever set a `From` address at all — Postmark requires one, and
+    it must be a verified Sender Signature on your account, not an
+    arbitrary address.
+
+  Fixed all three the same way in both nodes: a real
+  `X-Postmark-Server-Token` header and `From` address, both sourced from
+  new `$vars` Variables (`POSTMARK_SERVER_TOKEN`, `POSTMARK_FROM_EMAIL` —
+  see the Variables table above) rather than n8n's credential store,
+  matching this project's existing convention for every other third-party
+  API key. **This alone does not make email sending live** — you still
+  need to (1) set those two Variables to real values from a verified
+  Postmark account, and (2) deliberately set `SEND_ENABLED` to `"true"`
+  once you've confirmed a real test send works end to end. Neither of
+  those two steps was done as part of this fix, on purpose: only you can
+  supply a real Postmark account, and flipping the send-enabled switch
+  for real customer-facing email is a decision this repo leaves to you,
+  not something to flip as a side effect of a code fix.
 - Classifier output with `requires_human_review: true` is written to
   `/api/webhooks/inbound` with `requiresHumanReview: true`, which creates
   an `agent_runs` row with `status = needs_review` — it shows up in the
