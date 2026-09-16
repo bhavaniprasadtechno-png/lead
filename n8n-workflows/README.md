@@ -42,6 +42,8 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `SEND_ENABLED` | `true` or `false` — gates Agent 3's outbound send behind a feature flag until deliverability is validated | Agent 3 |
 | `ORG_ID` | Your org's UUID from the `organizations` table (single-tenant simplification — see notes in Agent 6/7) | Agents 6, 7 |
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
+| `CAL_COM_API_KEY` | Your Cal.com API key (Settings → Developer → API keys, `cal_live_...`) — sent as `Authorization: Bearer {{$vars.CAL_COM_API_KEY}}` against Cal.com's v2 API. If unset, `GET Available Slots` fails gracefully (see below) and the booking email just falls back to the plain link | Agent 5 |
+| `CAL_COM_EVENT_TYPE_ID` | The numeric event type ID from your Cal.com event type's dashboard URL, e.g. `app.cal.com/event-types/12345678` → `12345678`. Cal.com's v2 slots API takes this, not a username/slug — see "Real available slots in the booking email" below. If unset, same graceful fallback as above | Agent 5 |
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
@@ -914,3 +916,51 @@ Active for the app's automatic calls to reach it.
   cold). The other agents' `Warm Up App` + `retryOnFail` patterns stay in
   place as a second line of defense for the rare case a run still lands
   mid a cold boot.
+- **Real available slots in the booking email, instead of just a bare
+  Cal.com link.** Agent 5's booking email used to only ever offer
+  `{{booking_link}}` (the plain `CAL_COM_BOOKING_LINK` URL) with no
+  indication of when the recipient is actually free. Two new nodes —
+  **GET Available Slots** and **Parse Available Slots** — now run between
+  `Combine Prompt & Lead` and `Call LLM (Draft Booking Msg)`, fetching up
+  to 3 real upcoming open slots from Cal.com and listing them by name in
+  the email body (`Parse Booking Message` splices them in as plain text —
+  slots are never fed to the LLM itself, consistent with the existing
+  system prompt's own instruction to "offer a booking link placeholder
+  rather than inventing times": a wrong guess from the model is worse
+  than an honest, deterministic list).
+
+  **Getting the right Cal.com API shape took two failed live attempts.**
+  Cal.com's v2 slots API (`GET https://api.cal.com/v2/slots`) looks like
+  it should accept `username`/`eventTypeSlug` for a single personal event
+  type — it doesn't. Confirmed live twice (executions 903, 905): both a
+  singular `username` and a plural `usernames: [...]` array were rejected
+  with `400 BadRequestException: usernames must be an array...must
+  contain at least 2 elements`. That parameter shape is actually for
+  **team/org dynamic booking pages** (which need ≥2 usernames to pick
+  from), not a single event type lookup. The working identifier is
+  `eventTypeId` — a numeric ID, found in the event type's own Cal.com
+  dashboard URL (`app.cal.com/event-types/12345678`) — which is why a
+  second variable, `CAL_COM_EVENT_TYPE_ID`, is now required alongside
+  `CAL_COM_BOOKING_LINK` (see the Variables table above); the two aren't
+  redundant — one is a human-facing URL, the other is Cal.com's internal
+  numeric key for the same event type, and there's no reliable way to
+  derive one from the other in-workflow.
+
+  **Graceful degradation, not a hard dependency.** `GET Available Slots`
+  sets `neverError: true`; `Parse Available Slots` defaults to `slots: []`
+  on any failure (missing variable, Cal.com downtime, malformed response);
+  `Parse Booking Message` falls back to the original plain-link text
+  whenever `slots.length === 0`. A booking email should never fail to
+  send just because the slots lookup had a bad day — this mirrors the
+  same design already used for `GET Agent Prompt`/`GET Lead` cold-start
+  tolerance elsewhere in this repo, just for a third-party API instead of
+  the app's own.
+- **`CAL_COM_BOOKING_LINK` itself was never actually set — a pre-existing
+  gap, not something the slots feature above introduced.** Every booking
+  email sent by this workflow, including before the real-slots feature
+  existed, used the literal code fallback `https://cal.com/your-team/intro`
+  — a placeholder URL that goes nowhere. If your booking emails have ever
+  gone out with a dead link, this is why. Set `CAL_COM_BOOKING_LINK` in
+  n8n's Variables to your real Cal.com booking page URL to fix it; it's
+  independent of `CAL_COM_EVENT_TYPE_ID` above (that one only gates the
+  real-slots list, not the fallback link itself).

@@ -147,16 +147,82 @@
       "waitBetweenTries": 2000
     },
     {
+      "id": "84b44fb5-f7fe-4b49-a1b9-29f06c82104c",
+      "name": "GET Available Slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        0
+      ],
+      "notes": "Cal.com v2 slots API, looked up by eventTypeId (a numeric ID from the event type's Cal.com dashboard URL, e.g. app.cal.com/event-types/12345678 -> 12345678) rather than username/slug -- confirmed live (executions 903, 905) that GET /v2/slots rejects a username-based lookup for a single personal event ('usernames must be an array...must contain at least 2 elements', i.e. that parameter combination is actually for team/org dynamic booking pages, not a single event type). eventTypeId is the documented, evidence-backed working identifier. Requires the CAL_COM_EVENT_TYPE_ID n8n variable to be set; if it's unset (empty eventTypeId) or the API call fails for any other reason, neverError + the empty-list fallback in Parse Available Slots means this just quietly contributes no slots rather than breaking the booking email.",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.cal.com/v2/slots",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.CAL_COM_API_KEY }}"
+            },
+            {
+              "name": "cal-api-version",
+              "value": "2024-09-04"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "eventTypeId",
+              "value": "={{ $vars.CAL_COM_EVENT_TYPE_ID }}"
+            },
+            {
+              "name": "start",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "end",
+              "value": "={{ $now.plus({ days: 7 }).toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "0df4585a-3910-4914-8ad0-40f9b1b368c2",
+      "name": "Parse Available Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        140
+      ],
+      "notes": "Flattens Cal.com's date-keyed slots object into a flat list and takes the first 3 upcoming ones. Labels are stated explicitly in UTC rather than guessing the lead's timezone -- there's no per-lead timezone data in this system to convert to, and a wrong guess is worse than an honest UTC label.",
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst raw = (res && res.data) || {};\nconst starts = [];\nfor (const day of Object.keys(raw)) {\n  for (const slot of raw[day] || []) {\n    if (slot && slot.start) starts.push(slot.start);\n  }\n}\nstarts.sort();\nconst slots = starts.slice(0, 3).map((iso) => {\n  const d = new Date(iso);\n  const label = d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';\n  return { iso, label };\n});\nreturn [{ json: { slots } }];"
+      }
+    },
+    {
       "id": "parseMsg",
       "name": "Parse Booking Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
+        1320,
         0
       ],
       "parameters": {
-        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nparsed.body = parsed.body.replace('{{booking_link}}', bookingLink);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, ...parsed } }];"
+        "jsCode": "const text = $input.first().json.choices[0].message.content;\nconst withoutThoughts = text.replace(/<thought>[\\s\\S]*?<\\/thought>/gi, '');\nconst cleaned = withoutThoughts.trim().replace(/^```(?:json)?\\s*|\\s*```$/g, '');\nconst parsed = JSON.parse(cleaned);\nconst bookingLink = $vars.CAL_COM_BOOKING_LINK || 'https://cal.com/your-team/intro';\nconst slots = ($('Parse Available Slots').first().json.slots) || [];\nlet cta = bookingLink;\nif (slots.length > 0) {\n  const list = slots.map((s) => `- ${s.label}`).join('\\n');\n  cta = `A few times that work:\\n${list}\\n\\nOr pick any other time here: ${bookingLink}`;\n}\nparsed.body = parsed.body.replace('{{booking_link}}', cta);\nreturn [{ json: { leadId: $('Sign: Get Prompt').first().json.leadId, orgId: $('Sign: Get Prompt').first().json.orgId, agentId: $('GET Agent Prompt (scheduler)').first().json.agent.id, bookingLink, availableSlots: slots, ...parsed } }];"
       }
     },
     {
@@ -318,6 +384,28 @@
       ]
     },
     "Combine Prompt & Lead": {
+      "main": [
+        [
+          {
+            "node": "GET Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Available Slots": {
+      "main": [
+        [
+          {
+            "node": "Parse Available Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Available Slots": {
       "main": [
         [
           {
