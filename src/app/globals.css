@@ -4,34 +4,64 @@
 
 :root {
   color-scheme: light;
+  --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme(colors.slate.300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: theme(colors.slate.300);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: theme(colors.slate.400);
 }
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+  background-image: radial-gradient(circle at 12% 0%, theme(colors.brand.50) 0%, transparent 45%);
+  background-attachment: fixed;
 }
 
 .card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  @apply rounded-xl border border-slate-200 bg-white shadow-sm transition-[transform,box-shadow,border-color] duration-300;
+  transition-timing-function: var(--ease-premium);
+}
+
+/* Opt-in hover lift for interactive card surfaces (stat tiles, list rows, clickable panels) */
+.card-hover {
+  @apply hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300;
+}
+
+.glass {
+  @apply backdrop-blur-md bg-white/70 border border-white/60;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.97];
+  transition-timing-function: var(--ease-premium);
 }
 
 .btn-primary {
-  @apply btn bg-brand-500 text-white hover:bg-brand-600;
+  @apply btn bg-brand-500 text-white shadow-sm shadow-brand-500/30 hover:bg-brand-600 hover:shadow-md hover:shadow-brand-500/40 hover:-translate-y-px;
 }
 
 .btn-secondary {
-  @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50;
+  @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:-translate-y-px hover:shadow-sm;
 }
 
 .btn-danger {
-  @apply btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100;
+  @apply btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 hover:-translate-y-px;
 }
 
 .input {
-  @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500;
+  @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition-all duration-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20;
 }
 
 .label {
@@ -39,5 +69,10 @@ body {
 }
 
 .badge {
-  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-200;
+}
+
+/* Row-level hover affordance for table/list rows across the app */
+.row-hover {
+  @apply transition-colors duration-150 hover:bg-slate-50;
 }

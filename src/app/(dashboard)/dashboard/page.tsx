@@ -2,8 +2,9 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { getOrgOverview } from "@/lib/analytics";
 import { prisma } from "@/lib/db";
-import { PageHeader, StatusBadge } from "@/components/ui";
+import { PageHeader, StatusBadge, StatTile } from "@/components/ui";
 import { PIPELINE_STAGES } from "@/lib/constants";
+import { Stagger, StaggerItem, AnimatedNumber } from "@/components/motion";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -37,19 +38,18 @@ export default async function DashboardPage() {
         }
       />
       <div className="p-8 space-y-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Stagger className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((s) => (
-            <div key={s.label} className="card p-5">
-              <div className="text-sm text-slate-500">{s.label}</div>
-              <div className="text-2xl font-semibold mt-1">{s.value}</div>
-            </div>
+            <StaggerItem key={s.label}>
+              <StatTile label={s.label} value={s.value} />
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
 
         {overview.pendingApprovals > 0 && (
           <Link
             href="/approvals"
-            className="block card p-4 border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100"
+            className="block card card-hover p-4 border-amber-300 bg-amber-50 text-amber-800 text-sm font-medium hover:bg-amber-100"
           >
             ⚠️ {overview.pendingApprovals} AI-drafted response{overview.pendingApprovals === 1 ? "" : "s"} waiting for your review →
           </Link>
@@ -57,20 +57,22 @@ export default async function DashboardPage() {
 
         <div className="card p-6">
           <h2 className="font-semibold mb-4">Pipeline funnel</h2>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+          <Stagger className="grid grid-cols-3 md:grid-cols-6 gap-3">
             {PIPELINE_STAGES.map((stage) => (
-              <div key={stage} className="text-center">
-                <div className="text-2xl font-bold text-slate-800">{overview.funnel[stage] ?? 0}</div>
+              <StaggerItem key={stage} className="text-center">
+                <div className="text-2xl font-bold text-slate-800">
+                  <AnimatedNumber value={overview.funnel[stage] ?? 0} />
+                </div>
                 <div className="mt-1">
                   <StatusBadge status={stage} />
                 </div>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="card p-6">
+          <div className="card card-hover p-6">
             <h2 className="font-semibold mb-4">AI agent activity</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
@@ -92,7 +94,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="card p-6">
+          <div className="card card-hover p-6">
             <h2 className="font-semibold mb-4">Recent leads</h2>
             <div className="divide-y divide-slate-100">
               {recentLeads.length === 0 && <p className="text-sm text-slate-400">No leads yet.</p>}
@@ -100,7 +102,7 @@ export default async function DashboardPage() {
                 <Link
                   key={lead.id}
                   href={`/leads/${lead.id}`}
-                  className="flex items-center justify-between py-3 text-sm hover:bg-slate-50 -mx-2 px-2 rounded"
+                  className="row-hover flex items-center justify-between py-3 text-sm -mx-2 px-2 rounded"
                 >
                   <div>
                     <div className="font-medium">
