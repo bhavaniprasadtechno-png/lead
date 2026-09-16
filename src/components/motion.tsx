@@ -114,7 +114,7 @@ export function TiltCard({
         className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300"
         style={{
           opacity: glow.active ? 1 : 0,
-          background: `radial-gradient(220px circle at ${glow.x}% ${glow.y}%, rgba(26,82,255,0.10), transparent 60%)`,
+          background: `radial-gradient(220px circle at ${glow.x}% ${glow.y}%, rgba(115,87,240,0.14), transparent 60%)`,
         }}
       />
       {children}

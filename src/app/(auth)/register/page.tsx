@@ -40,7 +40,7 @@ export default function RegisterPage() {
   return (
     <>
       <FadeIn y={-10} className="text-center mb-8">
-        <div className="text-2xl font-bold text-brand-600">LeadPilot</div>
+        <div className="text-2xl font-bold brand-wordmark">LeadPilot</div>
         <p className="text-slate-500 text-sm mt-1">Create your organization</p>
       </FadeIn>
       <motion.form
