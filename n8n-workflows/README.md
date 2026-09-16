@@ -896,3 +896,21 @@ Active for the app's automatic calls to reach it.
   is by design: the classifier is instructed to never promise pricing on
   its own. The reply is now captured as an `Activity` and a
   `requires_review` agent run, visible in Approvals.
+- **The `Warm Up App` fix (removing `neverError` so `retryOnFail` actually
+  engages, see below) was real and necessary, but its combined retry
+  budget with the node behind it (~45-50s across both nodes, each capped
+  at n8n's hard per-node limit of 5 tries × 5s) still isn't always
+  enough.** Confirmed live: execution 892 on Agent 6 took `Warm Up App`
+  22.9s (genuinely retrying now, not the old 445ms no-op) and `GET
+  /sequences/due` a further 22.6s — both budgets fully spent — and still
+  503'd. Rather than push the per-node retry budget past what n8n allows,
+  added a ninth, dedicated workflow: **Agent 9 — Keep-Alive Ping**, a
+  bare `Cron: Every 10 min` → `GET /login` (`neverError`, no downstream
+  node, so it has no failure mode of its own). Ten minutes is comfortably
+  under Render's ~15-minute idle spin-down window, so the app now rarely
+  goes fully cold between Agent 4/6/7 runs in the first place — this
+  addresses the root cause (the app going cold at all) rather than
+  further stretching the mitigation (retrying harder once it's already
+  cold). The other agents' `Warm Up App` + `retryOnFail` patterns stay in
+  place as a second line of defense for the rare case a run still lands
+  mid a cold boot.

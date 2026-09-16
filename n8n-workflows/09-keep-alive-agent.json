@@ -1,0 +1,64 @@
+{
+  "name": "Agent 9 — Keep-Alive Ping",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Cron: Every 10 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "keepAlivePing",
+      "name": "GET /login (keep-alive)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Render's free tier spins the app down after ~15 min of no external traffic. Agent 4 (Gmail poll, every minute) and Agent 6 (cron, every 30 min) each carry their own Warm Up App + retryOnFail budget to ride out a cold start when they hit one, but that combined budget (~45-50s max) occasionally isn't enough on its own -- confirmed live (execution 892): a cold start took long enough that GET /sequences/due still 503'd even after its own node's retries AND the Warm Up App node's retries were both genuinely exhausted. Pinging the app every 10 minutes -- well under Render's 15-min idle window -- keeps it warm continuously, so the other agents rarely need their retry budgets to begin with. This ping's own result is irrelevant (neverError + no downstream node), so it has no failure mode of its own.",
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.APP_BASE_URL}}/login",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron: Every 10 min": {
+      "main": [
+        [
+          {
+            "node": "GET /login (keep-alive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
