@@ -201,7 +201,7 @@
       ],
       "notes": "Gmail's API throws its own error on failure, so this just reshapes the response into the {messageId} shape Sign: Report Meeting Offer already expects.",
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id } }];"
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id, threadId: res.threadId || res.id } }];"
       }
     },
     {
@@ -214,7 +214,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Booking Message').first().json;\nconst messageId = $json.messageId;\nconst body = { event: 'meeting.booked', orgId: p.orgId, leadId: p.leadId, agentType: 'scheduler', input: {}, output: { bookingLink: p.bookingLink, subject: p.subject, messageId }, requiresHumanReview: false };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst p = $('Parse Booking Message').first().json;\nconst messageId = $json.messageId;\nconst threadId = $json.threadId;\nconst body = { event: 'meeting.booked', orgId: p.orgId, leadId: p.leadId, agentType: 'scheduler', input: {}, output: { bookingLink: p.bookingLink, subject: p.subject, body: p.body, messageId, threadId }, requiresHumanReview: false };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
       }
     },
     {

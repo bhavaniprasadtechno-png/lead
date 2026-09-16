@@ -356,7 +356,7 @@
       ],
       "notes": "Gmail's API throws its own error on failure (unlike Postmark, there's no HTTP-200-but-failed edge case to separately check for), so this just reshapes the response into the {messageId} shape Sign: Report Sent already expects.",
       "parameters": {
-        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id } }];"
+        "jsCode": "const res = $input.first().json;\nreturn [{ json: { messageId: res.id, threadId: res.threadId || res.id } }];"
       }
     },
     {
@@ -369,7 +369,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst messageId = $json.messageId;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body, messageId }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
+        "jsCode": "const crypto = require('crypto');\nconst secret = $vars.N8N_WEBHOOK_SECRET;\nconst timestamp = Date.now();\nconst parsed = $('Parse Email JSON').first().json;\nconst messageId = $json.messageId;\nconst threadId = $json.threadId;\nconst body = { event: 'sequence.step_sent', orgId: parsed.orgId, leadId: parsed.leadId, enrollmentId: parsed.enrollmentId, agentType: 'writer', input: { templateId: parsed.templateId }, output: { subject: parsed.subject, body: parsed.body, messageId, threadId }, nextStepDueAt: null };\nconst rawBody = JSON.stringify(body);\nconst signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');\nreturn [{ json: { rawBody, timestamp, signature } }];"
       }
     },
     {

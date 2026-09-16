@@ -849,3 +849,50 @@ Active for the app's automatic calls to reach it.
   `nextStepDueAt` is correctly persisted as `null`, and `GET
   /api/sequences/due`'s `{ lte: new Date() }` filter correctly excludes a
   `null` value, so the enrollment stops being reported as due.
+- **Reply capture had never worked, for any lead, ever — independent of
+  the cold-start bug below.** `GET /api/leads/by-thread/:threadId` (which
+  Agent 4 calls to match an inbound reply's Gmail thread back to the lead
+  it belongs to) looks up `prisma.emailLog.findFirst({ where: { threadId
+  } })` — but nothing in the app ever created an `EmailLog` row. Agent
+  3/5's `sequence.step_sent`/`meeting.booked` handlers only ever created
+  an `Activity`; the `EmailLog` table (which exists specifically for this
+  lookup, per its own `@@index([threadId])`) stayed permanently empty.
+  Every real reply's thread lookup was destined to fail, cold start or
+  not. Fixed in `POST /api/webhooks/inbound`: both handlers now also
+  create an `EmailLog` row (subject/body/messageId/threadId from the
+  reported `output`), and `reply.classified` now stamps `repliedAt` on
+  the lead's most recent un-replied `EmailLog`. On the n8n side, `Extract
+  Gmail Message Id` (Agent 3 and 5) now also captures `threadId` (Gmail
+  sets `threadId === id` for a new message), and both `Sign: Report
+  Sent`/`Sign: Report Meeting Offer` forward it; Agent 5's report also now
+  includes `body`, which it never did before (`EmailLog.body` is
+  required, not nullable, so this was a second latent gap in the same
+  payload).
+- **On top of that, Agent 4 had the identical cold-start blind spot as
+  Agent 6/7 — and it silently dropped a real, live sales inquiry.**
+  Confirmed live: a genuine reply ("Can I get the pricing details") hit
+  `GET Lead by Thread` while the app was cold. That node has
+  `neverError: true` (needed so the app's expected 404 for the many
+  non-lead emails in the shared inbox doesn't fail the run) and no
+  `retryOnFail` at all, so Render's cold-start HTML page looked
+  identical, to `IF: Lead Found`, to a legitimate "not a tracked lead" —
+  both just have no `.lead` field. The reply was silently discarded, and
+  since Gmail's polling trigger only fires once per message, it would
+  never have been retried automatically. Fixed the same way as Agent 6/7:
+  a `Warm Up App` ping (Agent 4 is woken by Gmail polling, not app
+  traffic, so it's exposed to the exact same risk) plus `retryOnFail` on
+  `GET Lead by Thread` itself for connection-level failures `neverError`
+  doesn't suppress.
+
+  **The specific missed reply was recovered manually**, by temporarily
+  wiring an unpublished draft-only replay path (a manual trigger feeding
+  synthetic data matching the real payload, verified via cross-
+  referencing Agent 3's own execution history to confirm the lead
+  identity from the Gmail thread ID, since the historical thread
+  predates the `EmailLog` fix and so still has no row to look up) —
+  confirmed the classifier correctly read it as `needs_info` (a pricing
+  question) rather than `interested`, correctly routing it to human
+  review instead of auto-firing Agent 5's calendar-link auto-reply. This
+  is by design: the classifier is instructed to never promise pricing on
+  its own. The reply is now captured as an `Activity` and a
+  `requires_review` agent run, visible in Approvals.
