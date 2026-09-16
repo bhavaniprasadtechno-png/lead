@@ -30,7 +30,7 @@
         220,
         0
       ],
-      "notes": "Render's free tier spins the app down after ~15 min idle, and its start command runs `prisma db push` before `npm start`, so cold boot can take longer than the 20-25s max retry budget a single n8n node is allowed (5 tries x 5s, both hard-capped). Pinging a cheap page first -- neverError + continueRegularOutput so this never fails the run by itself -- spends a second retry budget absorbing cold-start latency before the real signed API calls (which have their own retry budget) get their turn.",
+      "notes": "Render's free tier spins the app down after ~15 min idle, and its start command runs `prisma db push` before `npm start`, so cold boot can take longer than the 20-25s max retry budget a single n8n node is allowed (5 tries x 5s, both hard-capped). Pinging a cheap page first -- retryOnFail actually rides out Render's 503 during cold start (neverError must NOT be set here, or it swallows the 503 as a normal response and retryOnFail never engages -- confirmed live, this made the ping \"succeed\" in ~450ms without ever waiting for the app) -- spends a second retry budget absorbing cold-start latency before the real signed API calls (which have their own retry budget) get their turn. onError: continueRegularOutput means the run still proceeds even if the app is still cold after this node's own budget is spent.",
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 5,
@@ -38,13 +38,7 @@
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/login",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "options": {}
       }
     },
     {
