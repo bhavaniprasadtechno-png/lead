@@ -1,12 +1,18 @@
+"use client";
+
+import { FadeIn, TiltCard, AnimatedNumber, ModalTransition, motion } from "@/components/motion";
+
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between px-8 py-6 border-b border-slate-200 bg-white">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+    <FadeIn y={-8}>
+      <div className="flex items-start justify-between px-8 py-6 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+          {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
-    </div>
+    </FadeIn>
   );
 }
 
@@ -40,9 +46,14 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`badge ${STATUS_STYLES[status] ?? "bg-slate-100 text-slate-700"}`}>
+    <motion.span
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.25 }}
+      className={`badge ${STATUS_STYLES[status] ?? "bg-slate-100 text-slate-700"}`}
+    >
       {status.replace(/_/g, " ")}
-    </span>
+    </motion.span>
   );
 }
 
@@ -56,10 +67,10 @@ export function ScoreBadge({ score }: { score: number | null | undefined }) {
 
 export function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="text-center py-16 text-slate-400">
+    <FadeIn className="text-center py-16 text-slate-400">
       <p className="font-medium">{title}</p>
       {subtitle && <p className="text-sm mt-1">{subtitle}</p>}
-    </div>
+    </FadeIn>
   );
 }
 
@@ -76,12 +87,12 @@ export function Modal({
   maxWidth?: string;
 }) {
   return (
-    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 px-4">
+    <ModalTransition>
       <div className={`card w-full ${maxWidth} p-6 max-h-[85vh] overflow-y-auto`}>
         <h2 className="font-semibold text-lg mb-4">{title}</h2>
         {children}
       </div>
-    </div>
+    </ModalTransition>
   );
 }
 
@@ -96,31 +107,39 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void;
 }) {
   return (
-    <div className="flex items-center gap-1 border-b border-slate-200">
+    <div className="flex items-center gap-1 border-b border-slate-200 relative">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-            active === tab.id
-              ? "border-brand-500 text-brand-600"
-              : "border-transparent text-slate-500 hover:text-slate-700"
+          className={`relative px-4 py-2.5 text-sm font-medium -mb-px transition-colors duration-200 ${
+            active === tab.id ? "text-brand-600" : "text-slate-500 hover:text-slate-700"
           }`}
         >
           {tab.label}
+          {active === tab.id && (
+            <motion.div
+              layoutId="tab-underline"
+              className="absolute left-0 right-0 -bottom-px h-0.5 bg-brand-500"
+              transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            />
+          )}
         </button>
       ))}
     </div>
   );
 }
 
-/** Small labeled number tile — the "stat tile" pattern used across the dashboard. */
+/** Small labeled number tile — the "stat tile" pattern used across the dashboard, with a 3D hover tilt and a count-up entrance. */
 export function StatTile({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  const numeric = typeof value === "number" || (typeof value === "string" && /^-?\d+$/.test(value));
   return (
-    <div className="card p-4">
+    <TiltCard className="card p-4 card-hover">
       <div className="text-xs text-slate-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
+      <div className="text-2xl font-semibold mt-1">
+        {numeric ? <AnimatedNumber value={Number(value)} /> : value}
+      </div>
       {hint && <div className="text-xs text-slate-400 mt-0.5">{hint}</div>}
-    </div>
+    </TiltCard>
   );
 }
