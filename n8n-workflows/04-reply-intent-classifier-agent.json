@@ -24,6 +24,32 @@
       }
     },
     {
+      "id": "warmUpApp",
+      "name": "Warm Up App (ride out cold start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        110,
+        0
+      ],
+      "notes": "Agent 4 is woken by Gmail polling, not by app traffic, so it faces the same cold-start risk as Agent 6/7's cron triggers. Render's free tier spins the app down after ~15 min idle; this cheap GET /login ping (neverError + continueRegularOutput, so it can never fail the run by itself) spends a retry budget waking the app before GET Lead by Thread gets its turn -- confirmed live that a cold app there silently drops a real lead reply instead of erroring loudly.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.APP_BASE_URL}}/login",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "signMatchThread",
       "name": "Sign: Match Thread",
       "type": "n8n-nodes-base.code",
@@ -45,6 +71,9 @@
         440,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
       "parameters": {
         "method": "GET",
         "url": "={{$vars.APP_BASE_URL}}/api/leads/by-thread/{{$json.threadId}}",
@@ -293,6 +322,17 @@
   ],
   "connections": {
     "Gmail Trigger: New Reply": {
+      "main": [
+        [
+          {
+            "node": "Warm Up App (ride out cold start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warm Up App (ride out cold start)": {
       "main": [
         [
           {

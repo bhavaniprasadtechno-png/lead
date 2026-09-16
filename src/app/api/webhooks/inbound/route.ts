@@ -72,6 +72,13 @@ export async function POST(req: Request) {
         } else if (intent === "interested" && lead.status !== "meeting_booked") {
           await prisma.lead.update({ where: { id: lead.id }, data: { status: "engaged" } });
         }
+        const mostRecentEmail = await prisma.emailLog.findFirst({
+          where: { leadId: lead.id, repliedAt: null },
+          orderBy: { sentAt: "desc" },
+        });
+        if (mostRecentEmail) {
+          await prisma.emailLog.update({ where: { id: mostRecentEmail.id }, data: { repliedAt: new Date() } });
+        }
         break;
       }
       case "meeting.booked": {
@@ -79,6 +86,18 @@ export async function POST(req: Request) {
         await prisma.activity.create({
           data: { leadId: lead.id, type: "meeting_booked", actor: "agent", agentName: "scheduler", payload: data.output ?? {} },
         });
+        const bookingOutput = data.output as { subject?: string; body?: string; messageId?: string; threadId?: string } | undefined;
+        if (bookingOutput?.subject) {
+          await prisma.emailLog.create({
+            data: {
+              leadId: lead.id,
+              subject: bookingOutput.subject,
+              body: bookingOutput.body ?? "",
+              messageId: bookingOutput.messageId,
+              threadId: bookingOutput.threadId ?? bookingOutput.messageId,
+            },
+          });
+        }
         break;
       }
       case "email.bounced": {
@@ -91,6 +110,18 @@ export async function POST(req: Request) {
         await prisma.activity.create({
           data: { leadId: lead.id, type: "email_sent", actor: "agent", agentName: "writer", payload: data.output ?? {} },
         });
+        const sentOutput = data.output as { subject?: string; body?: string; messageId?: string; threadId?: string } | undefined;
+        if (sentOutput?.subject) {
+          await prisma.emailLog.create({
+            data: {
+              leadId: lead.id,
+              subject: sentOutput.subject,
+              body: sentOutput.body ?? "",
+              messageId: sentOutput.messageId,
+              threadId: sentOutput.threadId ?? sentOutput.messageId,
+            },
+          });
+        }
         if (data.enrollmentId) {
           await prisma.sequenceEnrollment.update({
             where: { id: data.enrollmentId },
