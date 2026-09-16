@@ -25,7 +25,9 @@
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
-  background-image: radial-gradient(circle at 12% 0%, theme(colors.brand.50) 0%, transparent 45%);
+  background-image:
+    radial-gradient(circle at 14% -6%, rgba(115, 87, 240, 0.10) 0%, transparent 40%),
+    radial-gradient(circle at 88% 8%, rgba(217, 70, 184, 0.06) 0%, transparent 35%);
   background-attachment: fixed;
 }
 
@@ -36,7 +38,11 @@ body {
 
 /* Opt-in hover lift for interactive card surfaces (stat tiles, list rows, clickable panels) */
 .card-hover {
-  @apply hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-300;
+  @apply hover:-translate-y-0.5 hover:border-brand-200;
+  transition-timing-function: var(--ease-premium);
+}
+.card-hover:hover {
+  box-shadow: 0 12px 28px -12px rgba(115, 87, 240, 0.22), 0 4px 10px -4px rgba(15, 23, 42, 0.06);
 }
 
 .glass {
@@ -48,12 +54,18 @@ body {
   transition-timing-function: var(--ease-premium);
 }
 
+/* Gradient primary action — the one place the brand->accent gradient shows
+   up as a solid fill, so it reads as "the" call to action rather than
+   losing its weight by being reused everywhere. Written as a plain
+   background-image (not @apply'd bg-brand-gradient) since Next's dev-mode
+   CSS pipeline can't resolve a theme.backgroundImage key through @apply. */
 .btn-primary {
-  @apply btn bg-brand-500 text-white shadow-sm shadow-brand-500/30 hover:bg-brand-600 hover:shadow-md hover:shadow-brand-500/40 hover:-translate-y-px;
+  @apply btn text-white shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/35 hover:-translate-y-px hover:brightness-110;
+  background-image: linear-gradient(135deg, #7357f0 0%, #d946b8 100%);
 }
 
 .btn-secondary {
-  @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:-translate-y-px hover:shadow-sm;
+  @apply btn bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-brand-200 hover:-translate-y-px hover:shadow-sm;
 }
 
 .btn-danger {
@@ -74,5 +86,11 @@ body {
 
 /* Row-level hover affordance for table/list rows across the app */
 .row-hover {
-  @apply transition-colors duration-150 hover:bg-slate-50;
+  @apply transition-colors duration-150 hover:bg-brand-50/60;
+}
+
+/* Gradient wordmark — used by the sidebar logo and auth screens. */
+.brand-wordmark {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(135deg, #7357f0 0%, #d946b8 100%);
 }

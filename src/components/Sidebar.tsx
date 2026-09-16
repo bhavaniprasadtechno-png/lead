@@ -27,10 +27,10 @@ export function Sidebar({ orgName, userName }: { orgName: string; userName: stri
   }
 
   return (
-    <aside className="w-60 shrink-0 border-r border-slate-200 bg-white flex flex-col h-screen sticky top-0">
-      <div className="px-5 py-5 border-b border-slate-200">
+    <aside className="w-60 shrink-0 bg-ink-950 flex flex-col h-screen sticky top-0 text-slate-300">
+      <div className="px-5 py-5 border-b border-white/10">
         <motion.div
-          className="text-lg font-bold text-brand-600 inline-block"
+          className="text-lg font-bold brand-wordmark inline-block"
           whileHover={{ scale: 1.04 }}
           transition={{ type: "spring", stiffness: 400, damping: 15 }}
         >
@@ -51,13 +51,13 @@ export function Sidebar({ orgName, userName }: { orgName: string; userName: stri
               <Link
                 href={item.href}
                 className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
-                  active ? "text-brand-700" : "text-slate-600 hover:bg-slate-50"
+                  active ? "text-white" : "text-slate-400 hover:text-slate-100 hover:bg-white/5"
                 }`}
               >
                 {active && (
                   <motion.div
                     layoutId="sidebar-active"
-                    className="absolute inset-0 rounded-lg bg-brand-50"
+                    className="absolute inset-0 rounded-lg bg-brand-gradient shadow-lg shadow-brand-900/40"
                     transition={{ type: "spring", stiffness: 500, damping: 38 }}
                   />
                 )}
@@ -72,9 +72,9 @@ export function Sidebar({ orgName, userName }: { orgName: string; userName: stri
           );
         })}
       </nav>
-      <div className="px-3 py-4 border-t border-slate-200">
-        <div className="text-sm text-slate-700 truncate px-3">{userName}</div>
-        <button onClick={logout} className="mt-2 w-full text-left text-sm text-slate-500 hover:text-red-600 px-3 py-1 transition-colors duration-200">
+      <div className="px-3 py-4 border-t border-white/10">
+        <div className="text-sm text-slate-300 truncate px-3">{userName}</div>
+        <button onClick={logout} className="mt-2 w-full text-left text-sm text-slate-500 hover:text-accent-400 px-3 py-1 transition-colors duration-200">
           Sign out
         </button>
       </div>
