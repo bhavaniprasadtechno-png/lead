@@ -59,24 +59,65 @@ function domainOf(url: string | null): string {
   }
 }
 
-/** Rough approximation of a Google Search ad — not pixel-accurate, just enough to sanity-check copy before launch. */
-function GoogleAdsPreview({ campaign }: { campaign: AdCampaign }) {
+interface CopyOverride {
+  headline: string;
+  primaryText: string;
+  cta: string;
+}
+
+interface PreviewProps {
+  campaign: AdCampaign;
+  campaignId: string;
+  videoBust: number;
+  override?: CopyOverride | null;
+}
+
+/** Rough approximation of a Google ad — not pixel-accurate, just enough to sanity-check copy and creative before launch. */
+function GoogleAdsPreview({ campaign, campaignId, videoBust, override }: PreviewProps) {
+  const headline = override?.headline || campaign.headline;
+  const primaryText = override?.primaryText || campaign.primaryText;
+  const cta = override?.cta || "Visit site";
+  const hasMedia = !!campaign.video || !!campaign.imageUrl;
   return (
-    <div className="border border-slate-200 rounded-lg p-4 bg-white">
-      <div className="flex items-center gap-1.5 text-xs text-slate-600">
-        <span className="font-bold text-[11px] border border-slate-400 rounded px-1 leading-4">Ad</span>
-        <span>{domainOf(campaign.destinationUrl)}</span>
+    <div className="space-y-3">
+      <div className="border border-slate-200 rounded-lg p-4 bg-white">
+        <div className="flex items-center gap-1.5 text-xs text-slate-600">
+          <span className="font-bold text-[11px] border border-slate-400 rounded px-1 leading-4">Ad</span>
+          <span>{domainOf(campaign.destinationUrl)}</span>
+        </div>
+        <div className="text-[#1a0dab] text-lg leading-snug mt-1">{headline || "Your headline goes here"}</div>
+        <p className="text-sm text-slate-600 mt-1">
+          {primaryText || "Your ad description will appear here once you add primary text."}
+        </p>
       </div>
-      <div className="text-[#1a0dab] text-lg leading-snug mt-1">{campaign.headline || "Your headline goes here"}</div>
-      <p className="text-sm text-slate-600 mt-1">
-        {campaign.primaryText || "Your ad description will appear here once you add primary text."}
-      </p>
+      {hasMedia && (
+        <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+          <div className="aspect-video bg-slate-100 flex items-center justify-center overflow-hidden">
+            {campaign.video ? (
+              <video className="w-full h-full object-cover" controls src={`/api/ad-campaigns/${campaignId}/video?v=${videoBust}`} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={campaign.imageUrl!} alt="" className="w-full h-full object-cover" />
+            )}
+          </div>
+          <div className="px-3 py-2 flex items-center justify-between gap-2">
+            <div className="text-xs text-slate-500 truncate">{domainOf(campaign.destinationUrl)}</div>
+            <span className="text-xs font-semibold text-white bg-[#1a73e8] rounded px-2 py-1 shrink-0">{cta}</span>
+          </div>
+          <p className="text-[10px] text-slate-400 px-3 pb-2">
+            Display/video ad preview — shown because this campaign has a video or image (Google Display/Video, not classic text Search).
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
 /** Rough approximation of an Instagram feed ad — not pixel-accurate, just enough to sanity-check the creative before launch. */
-function InstagramAdsPreview({ campaign, campaignId, videoBust }: { campaign: AdCampaign; campaignId: string; videoBust: number }) {
+function InstagramAdsPreview({ campaign, campaignId, videoBust, override }: PreviewProps) {
+  const headline = override?.headline || campaign.headline;
+  const primaryText = override?.primaryText || campaign.primaryText;
+  const cta = override?.cta || "Learn more";
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -96,17 +137,16 @@ function InstagramAdsPreview({ campaign, campaignId, videoBust }: { campaign: Ad
       </div>
       <div className="px-3 py-2 space-y-1">
         <p className="text-sm">
-          <span className="font-semibold">Your Org</span>{" "}
-          {campaign.primaryText || "Your primary text will appear here."}
+          <span className="font-semibold">Your Org</span> {primaryText || "Your primary text will appear here."}
         </p>
-        {campaign.headline && (
+        {headline && (
           <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-1 gap-2">
             <div className="min-w-0">
               <div className="text-xs text-slate-400 uppercase truncate">{domainOf(campaign.destinationUrl)}</div>
-              <div className="text-sm font-medium truncate">{campaign.headline}</div>
+              <div className="text-sm font-medium truncate">{headline}</div>
             </div>
             <span className="text-xs font-semibold text-blue-600 border border-blue-200 rounded px-2 py-1 shrink-0">
-              Learn more
+              {cta}
             </span>
           </div>
         )}
@@ -135,6 +175,9 @@ export default function AdCampaignDetailPage() {
   const [videoBust, setVideoBust] = useState(0);
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [aiPreview, setAiPreview] = useState<CopyOverride | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/ad-campaigns/${params.id}`);
@@ -257,6 +300,27 @@ export default function AdCampaignDetailPage() {
     }
     setVideoBust((n) => n + 1);
     load();
+  }
+
+  async function generateAiPreview() {
+    setAiLoading(true);
+    setAiError(null);
+    const res = await fetch(`/api/ad-campaigns/${params.id}/ai-preview`, { method: "POST" });
+    setAiLoading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setAiError(data.error ?? "Failed to generate AI preview");
+      return;
+    }
+    const data = await res.json();
+    setAiPreview(data.preview);
+  }
+
+  function applyAiPreview() {
+    if (!aiPreview) return;
+    setForm({ ...form, headline: aiPreview.headline, primaryText: aiPreview.primaryText });
+    setAiPreview(null);
+    setMessage("AI copy applied to the form below — click Save to keep it.");
   }
 
   if (!campaign) return null;
@@ -449,14 +513,35 @@ export default function AdCampaignDetailPage() {
           </div>
 
           <div className="card p-6">
-            <h2 className="font-semibold mb-3">Preview</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Preview</h2>
+              <button className="btn-secondary text-xs !py-1" disabled={aiLoading} onClick={generateAiPreview}>
+                {aiLoading ? "Generating…" : "✨ Generate with AI"}
+              </button>
+            </div>
+            {aiError && <p className="text-xs text-red-600 mb-2">{aiError}</p>}
+            {aiPreview && (
+              <div className="flex items-center justify-between text-xs bg-brand-50 border border-brand-200 text-brand-700 rounded-lg px-3 py-2 mb-2">
+                <span>AI-suggested copy shown below — nothing&apos;s saved yet.</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button className="font-medium hover:underline" onClick={applyAiPreview}>
+                    Use this
+                  </button>
+                  <button className="text-slate-500 hover:underline" onClick={() => setAiPreview(null)}>
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
             {campaign.platform === "google_ads" ? (
-              <GoogleAdsPreview campaign={campaign} />
+              <GoogleAdsPreview campaign={campaign} campaignId={campaign.id} videoBust={videoBust} override={aiPreview} />
             ) : (
-              <InstagramAdsPreview campaign={campaign} campaignId={campaign.id} videoBust={videoBust} />
+              <InstagramAdsPreview campaign={campaign} campaignId={campaign.id} videoBust={videoBust} override={aiPreview} />
             )}
             <p className="text-xs text-slate-400 mt-3">
-              Approximate — reflects what&apos;s saved, and real rendering varies by device and placement. Click Save above after editing to update it.
+              Approximate — real rendering varies by device and placement. The base preview reflects what&apos;s saved
+              (click Save above after editing to update it); &quot;Generate with AI&quot; asks Gemini for a polished
+              take on top of that, as a suggestion you choose whether to apply.
             </p>
           </div>
 
