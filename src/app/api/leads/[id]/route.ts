@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireOrgSession, handleApiError, json, ApiError } from "@/lib/api";
-import { triggerN8nWebhook } from "@/lib/n8n";
 import { requireN8nSignature } from "@/lib/webhook-auth";
 import { QUALIFYING_SCORE_THRESHOLD } from "@/lib/constants";
 import { autoEnrollQualifiedLead } from "@/lib/sequences";
@@ -94,10 +93,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const { id } = await params;
 
-    // Must not re-apply: this handler can trigger the n8n lead.qualified
-    // webhook and auto-enrollment below, both of which must never re-fire
-    // for the same signed request (a re-fired lead.qualified would mean a
-    // second, duplicate outreach email sent for the same lead).
+    // Must not re-apply: this handler can trigger sequence auto-enrollment
+    // below, which must never re-fire for the same signed request (a
+    // re-fired enrollment attempt is a no-op today, but re-running any
+    // side effect twice for a replayed request is the wrong default).
     if (duplicate) {
       const fresh = await loadLead(orgId, id);
       return json({ lead: fresh, duplicate: true });
@@ -156,7 +155,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
       if (data.score >= QUALIFYING_SCORE_THRESHOLD && lead.status !== "qualified") {
         await prisma.lead.update({ where: { id }, data: { status: "qualified" } });
-        await triggerN8nWebhook("lead.qualified", { leadId: lead.id, orgId, score: data.score });
         await autoEnrollQualifiedLead(lead.id, orgId);
       }
     }

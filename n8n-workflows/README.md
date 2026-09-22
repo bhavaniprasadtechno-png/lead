@@ -188,8 +188,13 @@ prefix (e.g. `lead.enriched`, not `webhook/lead.enriched`).
 |---|---|---|
 | `lead.created` | 01-lead-enrichment-agent | `lead.created` |
 | `lead.enriched` | 02-lead-scoring-agent | `lead.enriched` |
-| `lead.qualified` | 03-email-personalization-agent | `lead.qualified` |
 | `icp.discover` | 08-icp-lead-prospector | `icp.discover` |
+
+Agent 3's `Webhook: lead.qualified` entry point still exists in the workflow but
+the app no longer calls it — see the changelog entry below on why that direct
+call was removed. Agent 3 is invoked exclusively through its `Execute Workflow
+Trigger` entry point now, by Agent 6, with a real `templateId` from the due
+sequence step.
 
 `icp.discover` is fired by `POST /api/icp-profiles/:id/discover`, which a
 user triggers from the app's **ICP** page (or you call directly) — it's
@@ -964,3 +969,26 @@ Active for the app's automatic calls to reach it.
   n8n's Variables to your real Cal.com booking page URL to fix it; it's
   independent of `CAL_COM_EVENT_TYPE_ID` above (that one only gates the
   real-slots list, not the fallback link itself).
+- **Every real lead qualification fired a webhook call to Agent 3 that
+  could never succeed.** Confirmed live: `PATCH /api/leads/:id` scoring a
+  lead past the qualifying threshold calls `triggerN8nWebhook("lead.qualified",
+  { leadId, orgId, score })` — no `templateId`. Agent 3's `Webhook:
+  lead.qualified` entry point builds `GET Template` from
+  `$json.templateId`, so with it missing the URL resolved to
+  `/api/email-templates/` (trailing slash, no id), which 401'd instead of
+  404'ing (a different, session-authenticated route matched instead of the
+  signed by-id one) — burning a full `retryOnFail` budget (5 tries × 5s)
+  on every single qualified lead. This was never fixable by supplying a
+  template at that call site: there's no sensible default template to pick
+  for an immediate, out-of-band send, and the *real* send path already
+  exists and already works — the same qualification also calls
+  `autoEnrollQualifiedLead`, which enrolls the lead into its campaign's
+  `lead_qualified`-triggered sequence, and Agent 6's poll then invokes
+  Agent 3 through `Execute Workflow Trigger` with the correct per-step
+  `templateId`. The direct webhook call was redundant with that working
+  path, not a second, faster one. Removed `triggerN8nWebhook("lead.qualified",
+  ...)` and the now-unreachable `"lead.qualified"` case from `N8nEvent`
+  entirely; Agent 3's `Webhook: lead.qualified` node is left in place in
+  n8n (harmless — it simply receives no more traffic) rather than deleted,
+  in case a future direct-send use case wants to reuse that entry point
+  with a real templateId supplied.
