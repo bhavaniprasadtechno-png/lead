@@ -346,9 +346,27 @@ model AdCampaign {
 
   organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   metrics      AdCampaignMetric[]
+  video        AdCampaignVideo?
 
   @@index([orgId])
   @@map("ad_campaigns")
+}
+
+// Uploaded ad creative video (max 5MB, enforced in the upload route). Stored
+// as a row of its own, not a column on AdCampaign, so listing/loading a
+// campaign never pulls multi-megabyte bytes unless the video is actually
+// being served — see GET /api/ad-campaigns/:id/video.
+model AdCampaignVideo {
+  id           String   @id @default(uuid())
+  adCampaignId String   @unique @map("ad_campaign_id")
+  data         Bytes
+  mimeType     String   @map("mime_type")
+  sizeBytes    Int      @map("size_bytes")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  adCampaign AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+
+  @@map("ad_campaign_videos")
 }
 
 // Daily performance rollup per ad campaign. Stays empty until a real

@@ -41,6 +41,78 @@ interface AdCampaign {
   imageUrl: string | null;
   launchedAt: string | null;
   metrics: AdCampaignMetric[];
+  video: { mimeType: string; sizeBytes: number } | null;
+}
+
+const MAX_VIDEO_BYTES = 5 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function domainOf(url: string | null): string {
+  if (!url) return "example.com";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "example.com";
+  }
+}
+
+/** Rough approximation of a Google Search ad — not pixel-accurate, just enough to sanity-check copy before launch. */
+function GoogleAdsPreview({ campaign }: { campaign: AdCampaign }) {
+  return (
+    <div className="border border-slate-200 rounded-lg p-4 bg-white">
+      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+        <span className="font-bold text-[11px] border border-slate-400 rounded px-1 leading-4">Ad</span>
+        <span>{domainOf(campaign.destinationUrl)}</span>
+      </div>
+      <div className="text-[#1a0dab] text-lg leading-snug mt-1">{campaign.headline || "Your headline goes here"}</div>
+      <p className="text-sm text-slate-600 mt-1">
+        {campaign.primaryText || "Your ad description will appear here once you add primary text."}
+      </p>
+    </div>
+  );
+}
+
+/** Rough approximation of an Instagram feed ad — not pixel-accurate, just enough to sanity-check the creative before launch. */
+function InstagramAdsPreview({ campaign, campaignId, videoBust }: { campaign: AdCampaign; campaignId: string; videoBust: number }) {
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-400 to-pink-500 shrink-0" />
+        <div className="text-sm font-semibold">Your Org</div>
+        <span className="text-xs text-slate-400 ml-auto">Sponsored</span>
+      </div>
+      <div className="aspect-square bg-slate-100 flex items-center justify-center overflow-hidden">
+        {campaign.video ? (
+          <video className="w-full h-full object-cover" controls src={`/api/ad-campaigns/${campaignId}/video?v=${videoBust}`} />
+        ) : campaign.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={campaign.imageUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-xs text-slate-400 px-4 text-center">No image or video uploaded yet</span>
+        )}
+      </div>
+      <div className="px-3 py-2 space-y-1">
+        <p className="text-sm">
+          <span className="font-semibold">Your Org</span>{" "}
+          {campaign.primaryText || "Your primary text will appear here."}
+        </p>
+        {campaign.headline && (
+          <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-1 gap-2">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-400 uppercase truncate">{domainOf(campaign.destinationUrl)}</div>
+              <div className="text-sm font-medium truncate">{campaign.headline}</div>
+            </div>
+            <span className="text-xs font-semibold text-blue-600 border border-blue-200 rounded px-2 py-1 shrink-0">
+              Learn more
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function joinList(value: string[] | undefined | null): string {
@@ -60,6 +132,9 @@ export default function AdCampaignDetailPage() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [videoBust, setVideoBust] = useState(0);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/ad-campaigns/${params.id}`);
@@ -144,6 +219,43 @@ export default function AdCampaignDetailPage() {
       return;
     }
     setMessage(null);
+    load();
+  }
+
+  async function uploadVideo(file: File) {
+    setVideoError(null);
+    if (!file.type.startsWith("video/")) {
+      setVideoError("File must be a video");
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setVideoError(`Video must be ${formatBytes(MAX_VIDEO_BYTES)} or smaller (this one is ${formatBytes(file.size)})`);
+      return;
+    }
+    setVideoUploading(true);
+    const body = new FormData();
+    body.append("video", file);
+    const res = await fetch(`/api/ad-campaigns/${params.id}/video`, { method: "POST", body });
+    setVideoUploading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setVideoError(data.error ?? "Failed to upload video");
+      return;
+    }
+    setVideoBust((n) => n + 1);
+    load();
+  }
+
+  async function removeVideo() {
+    setVideoUploading(true);
+    const res = await fetch(`/api/ad-campaigns/${params.id}/video`, { method: "DELETE" });
+    setVideoUploading(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setVideoError(data.error ?? "Failed to remove video");
+      return;
+    }
+    setVideoBust((n) => n + 1);
     load();
   }
 
@@ -284,6 +396,43 @@ export default function AdCampaignDetailPage() {
                 <label className="label">Image URL</label>
                 <input className="input" type="url" value={form.imageUrl ?? ""} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://example.com/ad-creative.png" />
               </div>
+              <div>
+                <label className="label">Video (optional, max {formatBytes(MAX_VIDEO_BYTES)})</label>
+                {videoError && <p className="text-xs text-red-600 mb-1">{videoError}</p>}
+                {campaign.video ? (
+                  <div className="space-y-2">
+                    <video
+                      controls
+                      className="w-full max-h-64 rounded-lg bg-black"
+                      src={`/api/ad-campaigns/${params.id}/video?v=${videoBust}`}
+                    />
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>{campaign.video.mimeType} · {formatBytes(campaign.video.sizeBytes)}</span>
+                      <button
+                        type="button"
+                        className="text-red-600 font-medium hover:underline"
+                        disabled={videoUploading}
+                        onClick={removeVideo}
+                      >
+                        Remove video
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    className="input"
+                    type="file"
+                    accept="video/*"
+                    disabled={videoUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadVideo(file);
+                      e.target.value = "";
+                    }}
+                  />
+                )}
+                {videoUploading && <p className="text-xs text-slate-400 mt-1">Uploading…</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -296,6 +445,18 @@ export default function AdCampaignDetailPage() {
               {campaign.launchedAt
                 ? `First launched ${new Date(campaign.launchedAt).toLocaleString()}`
                 : "Not launched yet."}
+            </p>
+          </div>
+
+          <div className="card p-6">
+            <h2 className="font-semibold mb-3">Preview</h2>
+            {campaign.platform === "google_ads" ? (
+              <GoogleAdsPreview campaign={campaign} />
+            ) : (
+              <InstagramAdsPreview campaign={campaign} campaignId={campaign.id} videoBust={videoBust} />
+            )}
+            <p className="text-xs text-slate-400 mt-3">
+              Approximate — reflects what&apos;s saved, and real rendering varies by device and placement. Click Save above after editing to update it.
             </p>
           </div>
 
