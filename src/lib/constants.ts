@@ -40,6 +40,15 @@ export const AGENT_TYPES = [
 
 export const QUALIFYING_SCORE_THRESHOLD = 60;
 
+export const AD_PLATFORMS = [
+  { value: "google_ads", label: "Google Ads" },
+  { value: "instagram_ads", label: "Instagram Ads" },
+] as const;
+
+export const AD_OBJECTIVES = ["awareness", "traffic", "leads", "conversions"] as const;
+
+export const AD_CAMPAIGN_STATUSES = ["draft", "active", "paused", "completed"] as const;
+
 export const DEFAULT_AGENT_PROMPTS: Record<string, { name: string; type: string; prompt: string }> = {
   scorer: {
     name: "Lead Scoring & Qualification Agent",
