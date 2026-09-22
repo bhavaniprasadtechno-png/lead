@@ -10,6 +10,7 @@ const NAV = [
   { href: "/icp", label: "ICP Search", icon: "🔍" },
   { href: "/pipeline", label: "Pipeline", icon: "🧭" },
   { href: "/campaigns", label: "Campaigns", icon: "📣" },
+  { href: "/ads", label: "Ads", icon: "🎯" },
   { href: "/templates", label: "Templates", icon: "✉️" },
   { href: "/agents", label: "AI Agents", icon: "🤖" },
   { href: "/approvals", label: "Approvals", icon: "✅" },

@@ -19,6 +19,8 @@ const PROVIDERS: { id: string; label: string; description: string }[] = [
   { id: "sendgrid", label: "SendGrid", description: "Alternative email sending provider" },
   { id: "gmail", label: "Gmail", description: "Reply capture & threading" },
   { id: "cal_com", label: "Cal.com", description: "Meeting scheduling" },
+  { id: "google_ads", label: "Google Ads", description: "Search & display ad campaigns — also connectable from the Ads page" },
+  { id: "instagram_ads", label: "Instagram Ads", description: "Instagram ad campaigns — also connectable from the Ads page" },
 ];
 
 export default function IntegrationsPage() {

@@ -40,6 +40,7 @@ model Organization {
   integrations      Integration[]
   icpProfiles       IcpProfile[]
   leadDiscoveryRuns LeadDiscoveryRun[]
+  adCampaigns       AdCampaign[]
 
   @@map("organizations")
 }
@@ -293,6 +294,83 @@ model EmailTemplate {
 }
 
 // ---------------------------------------------------------------------------
+// Ad Campaigns — Google Ads / Instagram Ads, run alongside email campaigns.
+// Platform connection status reuses Integration (provider google_ads /
+// instagram_ads) — see the note on AdCampaignMetric below for why there's no
+// real spend/reporting data yet.
+// ---------------------------------------------------------------------------
+
+enum AdPlatform {
+  google_ads
+  instagram_ads
+}
+
+enum AdCampaignStatus {
+  draft
+  active
+  paused
+  completed
+}
+
+enum AdObjective {
+  awareness
+  traffic
+  leads
+  conversions
+}
+
+model AdCampaign {
+  id                 String           @id @default(uuid())
+  orgId              String           @map("org_id")
+  name               String
+  platform           AdPlatform
+  objective          AdObjective      @default(leads)
+  status             AdCampaignStatus @default(draft)
+  dailyBudget        Decimal?         @map("daily_budget") @db.Decimal(10, 2)
+  totalBudget        Decimal?         @map("total_budget") @db.Decimal(10, 2)
+  currency           String           @default("USD")
+  startDate          DateTime?        @map("start_date")
+  endDate            DateTime?        @map("end_date")
+  // targeting: { geographies: string[], ageMin?, ageMax?, genders?: string[], interests?: string[], keywords?: string[] }
+  targeting          Json?
+  headline           String?
+  primaryText        String?          @map("primary_text")
+  destinationUrl     String?          @map("destination_url")
+  imageUrl           String?          @map("image_url")
+  // Populated once a real Google Ads / Meta Marketing API call creates the
+  // campaign on-platform. Null means it only exists in LeadPilot so far.
+  externalCampaignId String?          @map("external_campaign_id")
+  launchedAt         DateTime?        @map("launched_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  metrics      AdCampaignMetric[]
+
+  @@index([orgId])
+  @@map("ad_campaigns")
+}
+
+// Daily performance rollup per ad campaign. Stays empty until a real
+// ad-platform reporting integration is wired in — this app never fabricates
+// spend/impressions/clicks numbers, so the UI shows an honest empty state
+// instead of placeholder data until then.
+model AdCampaignMetric {
+  id           String   @id @default(uuid())
+  adCampaignId String   @map("ad_campaign_id")
+  date         DateTime @db.Date
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  spend        Decimal  @default(0) @db.Decimal(10, 2)
+  leads        Int      @default(0)
+
+  adCampaign AdCampaign @relation(fields: [adCampaignId], references: [id], onDelete: Cascade)
+
+  @@unique([adCampaignId, date])
+  @@map("ad_campaign_metrics")
+}
+
+// ---------------------------------------------------------------------------
 // Activity / Timeline — source of truth for what agents (or humans) did
 // ---------------------------------------------------------------------------
 
@@ -431,6 +509,8 @@ enum IntegrationProvider {
   cal_com
   google_calendar
   openrouter
+  google_ads
+  instagram_ads
 }
 
 enum IntegrationStatus {

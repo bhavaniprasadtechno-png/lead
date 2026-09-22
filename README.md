@@ -241,6 +241,14 @@ See `prisma/schema.prisma` for the authoritative model. Highlights:
   (full candidate list kept for audit, even candidates not imported)
 - `integrations` / `webhooks_inbound_log` — connection status for external
   providers and the signed-webhook audit trail
+- `ad_campaigns` / `ad_campaign_metrics` — Google Ads / Instagram Ads
+  campaigns (budget, targeting, creative) run from the **Ads** page,
+  alongside email campaigns. Platform "connection" reuses `integrations`
+  (`google_ads`/`instagram_ads` providers) and, like the rest of this
+  repo's integrations, is a status flag only — launching a campaign here
+  doesn't call a real ad platform yet; `external_campaign_id` and
+  `ad_campaign_metrics` are the hooks for wiring that in later, and stay
+  empty/null until then rather than showing fabricated numbers
 
 ## Roadmap (from the original architecture plan)
 
