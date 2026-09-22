@@ -41,7 +41,7 @@ authenticated, HMAC-signed REST/webhooks — never a shared database.
 |---|---|---|---|
 | 1 | Lead Enrichment | `lead.created` webhook | Apollo/Clearbit lookup → normalizes → `PATCH /leads/:id/enrichment` |
 | 2 | Lead Scoring & Qualification | `lead.enriched` webhook | The LLM scores 0–100 with reasoning → `PATCH /leads/:id` (app auto-qualifies at ≥60) |
-| 3 | Email Personalization & Sender | `lead.qualified` webhook / sequence step due | The LLM drafts subject+body from lead + template → sends → logs activity |
+| 3 | Email Personalization & Sender | sequence step due (invoked by Agent 6) | The LLM drafts subject+body from lead + template → sends → logs activity |
 | 4 | Reply Intent Classifier | Gmail/Graph trigger | Matches thread → lead, classifies intent, routes (interested/objection/lost/etc.) |
 | 5 | Meeting Scheduler | chained from Agent 4 | Proposes a booking link, updates lead to `meeting_booked` |
 | 6 | Sequence / Drip Orchestrator | cron (30 min) | Polls due sequence steps, decides whether to advance, triggers Agent 3 |

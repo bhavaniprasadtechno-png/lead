@@ -45,6 +45,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `CAL_COM_API_KEY` | Your Cal.com API key (Settings → Developer → API keys, `cal_live_...`) — sent as `Authorization: Bearer {{$vars.CAL_COM_API_KEY}}` against Cal.com's v2 API. If unset, `GET Available Slots` fails gracefully (see below) and the booking email just falls back to the plain link | Agent 5 |
 | `CAL_COM_EVENT_TYPE_ID` | The numeric event type ID from your Cal.com event type's dashboard URL, e.g. `app.cal.com/event-types/12345678` → `12345678`. Cal.com's v2 slots API takes this, not a username/slug — see "Real available slots in the booking email" below. If unset, same graceful fallback as above | Agent 5 |
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
+| `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as the `X-API-KEY` header to `google.serper.dev/search` as a second search engine run in parallel with Tavily on every query, to roughly double the raw material the candidate-extraction LLM sees per query | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
 | `POSTMARK_SERVER_TOKEN` | Your [Postmark](https://postmarkapp.com) Server API Token (Servers → your server → API Tokens) — sent as the `X-Postmark-Server-Token` header on `api.postmarkapp.com/email`. **Not a credential** — same pattern as `TAVILY_API_KEY`/`APOLLO_API_KEY`/etc above, a plain Variable | Agents 3, 5 |
@@ -188,8 +189,13 @@ prefix (e.g. `lead.enriched`, not `webhook/lead.enriched`).
 |---|---|---|
 | `lead.created` | 01-lead-enrichment-agent | `lead.created` |
 | `lead.enriched` | 02-lead-scoring-agent | `lead.enriched` |
-| `lead.qualified` | 03-email-personalization-agent | `lead.qualified` |
 | `icp.discover` | 08-icp-lead-prospector | `icp.discover` |
+
+Agent 3's `Webhook: lead.qualified` entry point still exists in the workflow but
+the app no longer calls it — see the changelog entry below on why that direct
+call was removed. Agent 3 is invoked exclusively through its `Execute Workflow
+Trigger` entry point now, by Agent 6, with a real `templateId` from the due
+sequence step.
 
 `icp.discover` is fired by `POST /api/icp-profiles/:id/discover`, which a
 user triggers from the app's **ICP** page (or you call directly) — it's
@@ -699,6 +705,21 @@ Active for the app's automatic calls to reach it.
   `Marketing Manager`/`Operations Manager` alongside the niche titles) and/or
   raising the company size ceiling — larger companies are far more likely
   to have a public page naming the specific role you're targeting.
+- **Search widened beyond the title dimension: `Build Search Query` now also
+  emits industry x geography combo queries** (e.g. `"SaaS companies in
+  United States - leadership team, executive team, founders, about us,
+  press release"`), alongside the existing per-title queries, capped at 8
+  extra queries (up to 4 industries x up to 2 geographies) so total query
+  volume — and the search + LLM cost that scales with it — stays bounded.
+  These are broader, title-agnostic queries (company directories, "top
+  companies" roundups, press releases) that surface real candidates whose
+  job title isn't in the title-broadening list at all. Needs at least one
+  stated industry to combo against geography; ICPs with no industry set
+  just keep the title queries, unchanged. Verified live end-to-end with a
+  real ICP (2 industries x 1 geography, so 2 extra combo queries on top of
+  the usual 10 broadened title queries): raised one run's final deduped
+  candidate count from 18 to 29 on the same ICP, all real, sourced
+  candidates.
 - **End-to-end audit across all 8 agents' real execution history found two
   more systemic bugs, both now fixed.**
 
@@ -964,3 +985,26 @@ Active for the app's automatic calls to reach it.
   n8n's Variables to your real Cal.com booking page URL to fix it; it's
   independent of `CAL_COM_EVENT_TYPE_ID` above (that one only gates the
   real-slots list, not the fallback link itself).
+- **Every real lead qualification fired a webhook call to Agent 3 that
+  could never succeed.** Confirmed live: `PATCH /api/leads/:id` scoring a
+  lead past the qualifying threshold calls `triggerN8nWebhook("lead.qualified",
+  { leadId, orgId, score })` — no `templateId`. Agent 3's `Webhook:
+  lead.qualified` entry point builds `GET Template` from
+  `$json.templateId`, so with it missing the URL resolved to
+  `/api/email-templates/` (trailing slash, no id), which 401'd instead of
+  404'ing (a different, session-authenticated route matched instead of the
+  signed by-id one) — burning a full `retryOnFail` budget (5 tries × 5s)
+  on every single qualified lead. This was never fixable by supplying a
+  template at that call site: there's no sensible default template to pick
+  for an immediate, out-of-band send, and the *real* send path already
+  exists and already works — the same qualification also calls
+  `autoEnrollQualifiedLead`, which enrolls the lead into its campaign's
+  `lead_qualified`-triggered sequence, and Agent 6's poll then invokes
+  Agent 3 through `Execute Workflow Trigger` with the correct per-step
+  `templateId`. The direct webhook call was redundant with that working
+  path, not a second, faster one. Removed `triggerN8nWebhook("lead.qualified",
+  ...)` and the now-unreachable `"lead.qualified"` case from `N8nEvent`
+  entirely; Agent 3's `Webhook: lead.qualified` node is left in place in
+  n8n (harmless — it simply receives no more traffic) rather than deleted,
+  in case a future direct-send use case wants to reuse that entry point
+  with a real templateId supplied.

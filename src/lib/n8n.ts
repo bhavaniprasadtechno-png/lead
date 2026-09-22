@@ -9,7 +9,6 @@ import { signPayload } from "@/lib/hmac";
 export type N8nEvent =
   | "lead.created"
   | "lead.enriched"
-  | "lead.qualified"
   | "sequence.step_due"
   | "email.replied"
   | "icp.discover";
