@@ -45,6 +45,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `CAL_COM_API_KEY` | Your Cal.com API key (Settings → Developer → API keys, `cal_live_...`) — sent as `Authorization: Bearer {{$vars.CAL_COM_API_KEY}}` against Cal.com's v2 API. If unset, `GET Available Slots` fails gracefully (see below) and the booking email just falls back to the plain link | Agent 5 |
 | `CAL_COM_EVENT_TYPE_ID` | The numeric event type ID from your Cal.com event type's dashboard URL, e.g. `app.cal.com/event-types/12345678` → `12345678`. Cal.com's v2 slots API takes this, not a username/slug — see "Real available slots in the booking email" below. If unset, same graceful fallback as above | Agent 5 |
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
+| `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as the `X-API-KEY` header to `google.serper.dev/search` as a second search engine run in parallel with Tavily on every query, to roughly double the raw material the candidate-extraction LLM sees per query | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
 | `POSTMARK_SERVER_TOKEN` | Your [Postmark](https://postmarkapp.com) Server API Token (Servers → your server → API Tokens) — sent as the `X-Postmark-Server-Token` header on `api.postmarkapp.com/email`. **Not a credential** — same pattern as `TAVILY_API_KEY`/`APOLLO_API_KEY`/etc above, a plain Variable | Agents 3, 5 |
@@ -704,6 +705,21 @@ Active for the app's automatic calls to reach it.
   `Marketing Manager`/`Operations Manager` alongside the niche titles) and/or
   raising the company size ceiling — larger companies are far more likely
   to have a public page naming the specific role you're targeting.
+- **Search widened beyond the title dimension: `Build Search Query` now also
+  emits industry x geography combo queries** (e.g. `"SaaS companies in
+  United States - leadership team, executive team, founders, about us,
+  press release"`), alongside the existing per-title queries, capped at 8
+  extra queries (up to 4 industries x up to 2 geographies) so total query
+  volume — and the search + LLM cost that scales with it — stays bounded.
+  These are broader, title-agnostic queries (company directories, "top
+  companies" roundups, press releases) that surface real candidates whose
+  job title isn't in the title-broadening list at all. Needs at least one
+  stated industry to combo against geography; ICPs with no industry set
+  just keep the title queries, unchanged. Verified live end-to-end with a
+  real ICP (2 industries x 1 geography, so 2 extra combo queries on top of
+  the usual 10 broadened title queries): raised one run's final deduped
+  candidate count from 18 to 29 on the same ICP, all real, sourced
+  candidates.
 - **End-to-end audit across all 8 agents' real execution history found two
   more systemic bugs, both now fixed.**
 
