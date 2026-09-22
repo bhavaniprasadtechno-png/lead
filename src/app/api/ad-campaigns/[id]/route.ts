@@ -33,7 +33,13 @@ const patchSchema = z.object({
 async function loadAdCampaign(orgId: string, id: string) {
   const adCampaign = await prisma.adCampaign.findFirst({
     where: { id, orgId },
-    include: { metrics: { orderBy: { date: "desc" } } },
+    include: {
+      metrics: { orderBy: { date: "desc" } },
+      // Metadata only — never select `data` here, it's the raw video bytes
+      // and this campaign's detail response would otherwise carry them on
+      // every load. GET /api/ad-campaigns/:id/video serves the bytes.
+      video: { select: { mimeType: true, sizeBytes: true } },
+    },
   });
   if (!adCampaign) throw new ApiError("Ad campaign not found", 404);
   return adCampaign;
