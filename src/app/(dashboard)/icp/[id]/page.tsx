@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, EmptyState } from "@/components/ui";
 
@@ -43,12 +43,14 @@ function splitList(value: string): string[] {
 
 export default function IcpDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [icp, setIcp] = useState<IcpProfile | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [icpRes, runsRes] = await Promise.all([
@@ -79,6 +81,31 @@ export default function IcpDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // While a just-started run is still queued/running, poll for its terminal state instead
+  // of making the user manually reload the page. Stops as soon as the run completes or
+  // fails; on success it hands off to the leads list already filtered to this ICP, since
+  // that's where the discovered leads actually show up.
+  useEffect(() => {
+    if (!activeRunId) return;
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/icp-profiles/${params.id}/runs`);
+      const data = await res.json();
+      const freshRuns: Run[] = data.runs ?? [];
+      setRuns(freshRuns);
+      const run = freshRuns.find((r) => r.id === activeRunId);
+      if (!run || (run.status !== "completed" && run.status !== "failed")) return;
+      clearInterval(interval);
+      setActiveRunId(null);
+      if (run.status === "completed") {
+        setMessage(`Search complete — ${run.leadsCreated ?? 0} new lead(s) added. Taking you to the leads list…`);
+        setTimeout(() => router.push(`/leads?icpId=${params.id}`), 1500);
+      } else {
+        setMessage(run.errorMessage ?? "Search failed.");
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeRunId, params.id, router]);
 
   async function save() {
     setSaving(true);
@@ -117,11 +144,12 @@ export default function IcpDetailPage() {
     setMessage(null);
     try {
       const res = await fetch(`/api/icp-profiles/${params.id}/discover`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to start search");
       }
-      setMessage("Search started — the Prospector agent is searching the web. Refresh to see progress.");
+      setMessage("Search started — the Prospector agent is searching the web. This page will update automatically once it's done.");
+      setActiveRunId(data.run?.id ?? null);
       load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to start search");
