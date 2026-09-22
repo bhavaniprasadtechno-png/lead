@@ -8,7 +8,21 @@ import { AD_PLATFORMS, AD_OBJECTIVES, AD_CAMPAIGN_STATUSES } from "@/lib/constan
 interface Integration {
   provider: string;
   status: string;
+  credentialRef: string | null;
 }
+
+const ACCOUNT_ID_CONFIG: Record<string, { label: string; placeholder: string; help: string }> = {
+  google_ads: {
+    label: "Google Ads Customer ID",
+    placeholder: "123-456-7890",
+    help: "Found in Google Ads under Account settings — the number at the top right of the dashboard.",
+  },
+  instagram_ads: {
+    label: "Instagram Ads Account ID",
+    placeholder: "act_1234567890",
+    help: "Your Meta Ads Manager ad account ID (Business Settings → Ad Accounts).",
+  },
+};
 
 interface AdCampaign {
   id: string;
@@ -36,6 +50,7 @@ export default function AdsPage() {
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [intRes, campRes] = await Promise.all([fetch("/api/integrations"), fetch("/api/ad-campaigns")]);
@@ -54,12 +69,15 @@ export default function AdsPage() {
     return integrations.find((i) => i.provider === provider)?.status ?? "disconnected";
   }
 
-  async function togglePlatform(provider: string) {
-    const status = statusFor(provider) === "connected" ? "disconnected" : "connected";
+  function credentialRefFor(provider: string) {
+    return integrations.find((i) => i.provider === provider)?.credentialRef ?? null;
+  }
+
+  async function disconnectPlatform(provider: string) {
     await fetch("/api/integrations", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ provider, status }),
+      body: JSON.stringify({ provider, status: "disconnected" }),
     });
     load();
   }
@@ -104,23 +122,33 @@ export default function AdsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {AD_PLATFORMS.map((p) => {
               const status = statusFor(p.value);
+              const credentialRef = credentialRefFor(p.value);
               return (
-                <div key={p.value} className="card p-5 flex items-center justify-between">
+                <div key={p.value} className="card p-5 flex items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{p.label}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{p.label}</span>
+                      <span className={`badge ${status === "connected" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>
+                        {status}
+                      </span>
+                    </div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       {status === "connected"
-                        ? "Connected — campaigns on this platform can be launched"
+                        ? credentialRef
+                          ? `Account ${credentialRef}`
+                          : "Connected — campaigns on this platform can be launched"
                         : "Not connected — connect before launching a campaign"}
                     </div>
                   </div>
-                  <button
-                    onClick={() => togglePlatform(p.value)}
-                    title={status === "connected" ? "Click to disconnect" : "Click to connect"}
-                    className={`badge cursor-pointer ${status === "connected" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}
-                  >
-                    {status}
-                  </button>
+                  {status === "connected" ? (
+                    <button className="btn-secondary shrink-0" onClick={() => disconnectPlatform(p.value)}>
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button className="btn-primary shrink-0" onClick={() => setConnectingPlatform(p.value)}>
+                      Connect
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -177,7 +205,79 @@ export default function AdsPage() {
         </div>
       </div>
       {showModal && <NewAdCampaignModal onClose={() => setShowModal(false)} onCreated={load} />}
+      {connectingPlatform && (
+        <ConnectPlatformModal platform={connectingPlatform} onClose={() => setConnectingPlatform(null)} onConnected={load} />
+      )}
     </div>
+  );
+}
+
+function ConnectPlatformModal({
+  platform,
+  onClose,
+  onConnected,
+}: {
+  platform: string;
+  onClose: () => void;
+  onConnected: () => void;
+}) {
+  const config = ACCOUNT_ID_CONFIG[platform];
+  const label = AD_PLATFORMS.find((p) => p.value === platform)?.label ?? platform;
+  const [accountId, setAccountId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: platform, status: "connected", credentialRef: accountId }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed to connect");
+      onConnected();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to connect");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={`Connect ${label}`} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+        <div>
+          <label className="label">{config.label}</label>
+          <input
+            className="input"
+            required
+            autoFocus
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            placeholder={config.placeholder}
+          />
+          <p className="text-xs text-slate-400 mt-1">{config.help}</p>
+        </div>
+        <p className="text-xs text-slate-400">
+          This links which account your campaigns run under — it doesn&apos;t grant API access yet. To make this
+          launch real ads, set the platform&apos;s developer token / access token as an n8n Variable, the same way
+          TAVILY_API_KEY and the other integrations in this app are configured.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Connecting…" : "Connect"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
