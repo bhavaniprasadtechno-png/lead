@@ -160,6 +160,12 @@ openssl rand -base64 32   # → AUTH_SECRET
 openssl rand -base64 32   # → N8N_WEBHOOK_SECRET
 ```
 
+Optional: set `GOOGLE_AI_API_KEY` (same value as n8n's Variable of the same
+name) to enable the "✨ Generate with AI" button on an ad campaign's Preview
+card under **Ads** — see `.env.example` for why this one feature calls the
+LLM directly from the app instead of through n8n. Everything else works
+without it.
+
 ### 3. Install, migrate, seed
 
 ```bash
