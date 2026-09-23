@@ -29,6 +29,15 @@ export default function ApprovalsPage() {
     load();
   }, [load]);
 
+  // New items land here asynchronously from n8n (a lead reply came in and needed
+  // review) with no user action to trigger a reload, so this is a live queue a
+  // rep might sit on for a while — poll for new arrivals rather than requiring
+  // a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, [load]);
+
   function startEdit(a: Approval) {
     setEditingId(a.id);
     setDrafts((prev) => ({ ...prev, [a.id]: JSON.stringify(a.output, null, 2) }));
@@ -46,18 +55,29 @@ export default function ApprovalsPage() {
       }
     }
     setApprovals((prev) => prev.filter((x) => x.id !== a.id));
-    await fetch(`/api/approvals/${a.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision, ...(editedOutput !== undefined ? { editedOutput } : {}) }),
-    });
+    try {
+      const res = await fetch(`/api/approvals/${a.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ decision, ...(editedOutput !== undefined ? { editedOutput } : {}) }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to record decision");
+      }
+    } catch (err) {
+      // The decision didn't actually go through — put the item back rather than
+      // silently dropping it from the queue while the DB still shows it pending.
+      setApprovals((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]));
+      setErrors((prev) => ({ ...prev, [a.id]: err instanceof Error ? err.message : "Failed to record decision" }));
+    }
   }
 
   return (
     <div>
       <PageHeader
         title="Approvals"
-        subtitle="AI-drafted replies touching pricing, legal, or low-confidence intent wait here before sending"
+        subtitle="AI-drafted replies touching pricing, legal, or low-confidence intent wait here — approving sends the reply and/or schedules a meeting; rejecting stands down"
       />
       <div className="p-8">
         {approvals.length === 0 ? (
@@ -118,7 +138,7 @@ export default function ApprovalsPage() {
                     Reject
                   </button>
                   <button className="btn-primary" onClick={() => decide(a, "approved")}>
-                    Approve &amp; send
+                    Approve
                   </button>
                 </div>
               </div>
