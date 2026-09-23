@@ -1060,3 +1060,55 @@ Active for the app's automatic calls to reach it.
   via Apollo (company) + Hunter (email), matching the tools each is
   actually built for, and Serper stays scoped to Agent 8's discovery use
   case.
+- **End-to-end audit of qualified-lead email → reply → approval →
+  scheduling: three real bugs found and fixed.**
+  1. **Agent 4's `IF: Interested` bypassed the Approvals queue entirely
+     for low-confidence interested replies.** It only checked
+     `intent === "interested"`, so a reply the classifier itself flagged
+     `requires_human_review: true` still went straight to
+     `Call Agent 5 (Scheduler)` and got a meeting auto-booked — the human
+     review step existed in the DB (the run showed up as `needs_review`)
+     but had no actual power to stop anything. Fixed by adding a second
+     condition (`requires_human_review !== true`) so a low-confidence
+     interested reply now falls through to no-op here, exactly as
+     intended: it's already sitting in Approvals via
+     `POST /webhooks/inbound`, and only acts once a rep decides.
+  2. **`email.replied` — fired by `POST /api/approvals/:id` whenever a
+     rep approves or rejects an Approvals item — had no workflow
+     receiving it, a gap this README used to just document rather than
+     fix.** An approved low-confidence reply sat in the DB with nothing
+     actually scheduling a meeting or sending the approved reply. Agent 4
+     now has a `Webhook: email.replied` entry point: on
+     `decision: "approved"`, it calls Agent 5 if the approved output's
+     `intent` is `"interested"` (the same call Agent 4 already makes for
+     high-confidence replies), and separately sends the approved
+     `suggested_reply` via Gmail unless the intent is
+     `unsubscribe`/`out_of_office` (matching the classifier's own
+     drafting rule to skip those), logging the send as a lead activity.
+     This also required adding `orgId` to the `email.replied` payload in
+     `POST /api/approvals/:id` (missing before — Agent 5's
+     `Execute Workflow Trigger` requires it).
+  3. **Agent 6's `Call LLM (Should Send?)` had no `neverError`, so one
+     lead's transient Gemini 503 killed the entire due-steps batch —
+     confirmed live across 4 separate failed cron runs in one day.**
+     `GET /sequences/due` can return several enrollments due for their
+     next sequence email in the same 30-minute poll; a single LLM
+     hiccup on the *first* one aborted the whole execution before any of
+     the others (including leads with a real email ready to send) were
+     even attempted. Added `neverError` (same pattern as Apollo/Hunter)
+     and made `Parse Decision JSON` fall back to `should_send: false`
+     with a clear reason when the LLM response has no `choices` (an
+     error body instead of a completion) — a transient LLM failure now
+     just skips that one lead for this cycle (it stays due and retries
+     on the next poll) instead of blocking every other qualified lead's
+     email in the batch.
+
+  All three were verified live with synthetic data via the
+  rename/bypass/revert scaffold pattern used throughout this file, then
+  reverted cleanly and republished. Two failures seen in the same audit
+  were **not** live bugs: Agent 3's `GET Template` 401s (execution
+  timestamps predate the `lead.qualified` webhook removal documented
+  above) and one Agent 4 `Sign: Match Thread` crash on an undefined
+  `N8N_WEBHOOK_SECRET` (a single occurrence, on a Gmail security-alert
+  notification rather than a real lead reply — treated as a transient
+  glitch, not reproduced since).
