@@ -985,7 +985,21 @@ Active for the app's automatic calls to reach it.
   n8n's Variables to your real Cal.com booking page URL to fix it; it's
   independent of `CAL_COM_EVENT_TYPE_ID` above (that one only gates the
   real-slots list, not the fallback link itself).
-- **Every real lead qualification fired a webhook call to Agent 3 that
+- **Both Cal.com gaps above are now fixed and verified live.**
+  `CAL_COM_BOOKING_LINK` is set to a real booking page. Separately,
+  `CAL_COM_EVENT_TYPE_ID` had been set to a full booking URL (e.g.
+  `https://cal.com/<user>/30min?overlayCalendar=true`) instead of the
+  numeric event type ID `GET Available Slots` actually needs — Cal.com's
+  `/v2/slots` endpoint takes a plain integer here, so this silently
+  degraded to zero real slots via the `neverError` fallback rather than
+  erroring loudly. Found the correct value by calling Cal.com's
+  `GET /v2/event-types` directly (matching the event type's `slug` to the
+  one in `CAL_COM_BOOKING_LINK`) rather than guessing. Verified end-to-end
+  live with real API calls throughout: `GET Available Slots` returned
+  real open slots across the next week, `Parse Available Slots` correctly
+  flattened them, and `Parse Booking Message` correctly merged them with
+  the real booking link into the final email body — only the Gmail send
+  itself was mocked for the test, to avoid emailing a real lead.
   could never succeed.** Confirmed live: `PATCH /api/leads/:id` scoring a
   lead past the qualifying threshold calls `triggerN8nWebhook("lead.qualified",
   { leadId, orgId, score })` — no `templateId`. Agent 3's `Webhook:
