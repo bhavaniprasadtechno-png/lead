@@ -10,6 +10,15 @@ interface MeetingBookedPayload {
 }
 
 /**
+ * Agent 5's n8n workflow falls back to this literal string when the
+ * CAL_COM_BOOKING_LINK n8n Variable was unset at send time — it's a
+ * dead 404 on cal.com, not a real booking page. Older meeting_booked
+ * activities logged before that Variable was configured have it baked
+ * into their stored payload; filter it out here rather than link to it.
+ */
+const PLACEHOLDER_BOOKING_LINK = "https://cal.com/your-team/intro";
+
+/**
  * GET /api/meetings — every meeting the Scheduler agent has proposed to a
  * lead, newest first. This reflects the booking email being sent (a real
  * `meeting_booked` Activity + Lead.status transition, written by
@@ -31,11 +40,12 @@ export async function GET() {
     });
     const meetings = activities.map((a) => {
       const payload = (a.payload ?? {}) as MeetingBookedPayload;
+      const bookingLink = payload.bookingLink && payload.bookingLink !== PLACEHOLDER_BOOKING_LINK ? payload.bookingLink : null;
       return {
         id: a.id,
         createdAt: a.createdAt,
         lead: a.lead,
-        bookingLink: payload.bookingLink ?? null,
+        bookingLink,
         subject: payload.subject ?? null,
         body: payload.body ?? null,
       };
