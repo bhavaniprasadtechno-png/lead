@@ -1112,3 +1112,27 @@ Active for the app's automatic calls to reach it.
   `N8N_WEBHOOK_SECRET` (a single occurrence, on a Gmail security-alert
   notification rather than a real lead reply — treated as a transient
   glitch, not reproduced since).
+- **A lead with no email got silently re-processed by Agent 6 -> Agent 3
+  every 30 minutes, forever, with zero progress.** `IF: Has Email`'s
+  false branch was a dead end — nothing ever told the app the step
+  couldn't be sent, so `GET /sequences/due` (Agent 6's poll) kept
+  returning the exact same enrollment on every single cycle. Confirmed
+  live: one `ai_discovery` lead whose Apollo company enrichment also came
+  back empty (so Agent 1's Hunter email-backfill branch — added after
+  this lead was originally enriched — never got a chance to run on her)
+  had been retried this way for ~19 hours straight. Fixed by adding a
+  `Sign: Report Skipped` -> `POST /webhooks/inbound (skip)` chain off
+  `IF: Has Email`'s false branch, reporting a new `sequence.skipped`
+  event with a reason. The app's handler for it sets
+  `SequenceEnrollment.stoppedReason` (a field that already existed for
+  exactly this purpose but nothing ever set it) so the enrollment is
+  excluded from all future due-steps polls, and logs the skip as a lead
+  activity so it's visible on the lead's timeline instead of silently
+  vanishing into a retry loop. **Sequencing note:** this Agent 3 change
+  was verified live but deliberately held back from publishing until
+  the app-side `sequence.skipped` handler was deployed — publishing
+  first would have made the live branch 422 on a real lead (the app
+  rejecting an event type it doesn't know yet), and since that node
+  isn't `neverError`, would have failed the whole Agent 3 sub-execution
+  and reintroduced a batch-blocking failure in Agent 6, the same class
+  of bug just fixed above.
