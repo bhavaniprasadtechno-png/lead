@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { PageHeader, StatusBadge, ScoreBadge, EmptyState } from "@/components/ui";
+import { PageHeader, StatusBadge, ScoreBadge, EmptyState, Modal } from "@/components/ui";
 import { LEAD_STATUSES } from "@/lib/constants";
+import { buildCsv } from "@/lib/csv";
 
 interface Lead {
   id: string;
@@ -27,6 +28,7 @@ export default function LeadsPage() {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,9 +59,14 @@ export default function LeadsPage() {
         title="Leads"
         subtitle="Every lead captured across your channels, enriched and scored by AI"
         actions={
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Add lead
-          </button>
+          <>
+            <button className="btn-secondary" onClick={() => setShowBulkModal(true)}>
+              Bulk upload
+            </button>
+            <button className="btn-primary" onClick={() => setShowModal(true)}>
+              + Add lead
+            </button>
+          </>
         }
       />
       <div className="p-8">
@@ -139,7 +146,126 @@ export default function LeadsPage() {
       </div>
 
       {showModal && <AddLeadModal onClose={() => setShowModal(false)} onCreated={load} />}
+      {showBulkModal && <BulkUploadModal onClose={() => setShowBulkModal(false)} onCreated={load} />}
     </div>
+  );
+}
+
+const CSV_TEMPLATE_HEADERS = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "company",
+  "jobTitle",
+  "linkedinUrl",
+  "website",
+];
+
+function downloadCsvTemplate() {
+  const csv = buildCsv(CSV_TEMPLATE_HEADERS, [
+    ["Jordan", "Lee", "jordan@example.com", "", "Example Corp", "VP Sales", "", "example.com"],
+  ]);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "leadpilot-leads-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+interface BulkUploadResult {
+  created: number;
+  skipped: number;
+  totalRows: number;
+  errors: { row: number; error: string }[];
+}
+
+function BulkUploadModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<BulkUploadResult | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/leads/bulk-upload", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setResult(data);
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <Modal title="Bulk upload leads" onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4">
+        <div className="text-sm text-slate-600">
+          <p>
+            Upload a CSV of leads. Only <span className="font-medium">firstName</span> is required — leave the
+            rest blank and each lead is automatically enriched (company data via Apollo) and scored by the AI
+            agents once imported, same as a manually added lead.
+          </p>
+          <button type="button" className="text-brand-600 font-medium hover:underline mt-2" onClick={downloadCsvTemplate}>
+            Download CSV template →
+          </button>
+        </div>
+
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+
+        {result && (
+          <div className="text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 space-y-1">
+            <p>
+              <span className="font-medium text-emerald-700">{result.created} created</span>
+              {result.skipped > 0 && <span className="text-slate-500"> · {result.skipped} skipped (duplicate email)</span>}
+              {result.errors.length > 0 && <span className="text-red-600"> · {result.errors.length} failed</span>}
+              <span className="text-slate-400"> · {result.totalRows} rows total</span>
+            </p>
+            {result.errors.length > 0 && (
+              <ul className="text-xs text-red-600 list-disc pl-4 max-h-32 overflow-y-auto">
+                {result.errors.map((e, i) => (
+                  <li key={i}>
+                    Row {e.row}: {e.error}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="label">CSV file</label>
+            <input
+              className="input"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              {result ? "Done" : "Cancel"}
+            </button>
+            <button type="submit" disabled={!file || uploading} className="btn-primary">
+              {uploading ? "Uploading…" : "Upload"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </Modal>
   );
 }
 
