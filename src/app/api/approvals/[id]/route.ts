@@ -45,11 +45,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
     }
 
-    // Let the n8n workflow know it can proceed (send the approved reply) or
-    // stand down.
+    // Let the n8n workflow know it can proceed (send the approved reply,
+    // schedule a meeting) or stand down. orgId is required by Agent 5's
+    // Execute Workflow Trigger when the approval resumes a scheduling call.
     await triggerN8nWebhook("email.replied", {
       agentRunId: run.id,
       leadId: run.leadId,
+      orgId: session.orgId,
       decision: parsed.data.decision,
       output: updated.output,
     });
