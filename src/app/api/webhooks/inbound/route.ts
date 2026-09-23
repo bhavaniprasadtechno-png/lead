@@ -4,7 +4,7 @@ import { handleApiError, json, ApiError } from "@/lib/api";
 import { requireN8nSignature } from "@/lib/webhook-auth";
 
 const schema = z.object({
-  event: z.enum(["reply.classified", "meeting.booked", "email.bounced", "sequence.step_sent"]),
+  event: z.enum(["reply.classified", "meeting.booked", "email.bounced", "sequence.step_sent", "sequence.skipped"]),
   orgId: z.string().uuid(),
   leadId: z.string().uuid(),
   enrollmentId: z.string().uuid().optional(),
@@ -129,6 +129,23 @@ export async function POST(req: Request) {
               currentStep: { increment: 1 },
               nextStepDueAt: data.nextStepDueAt ? new Date(data.nextStepDueAt) : null,
             },
+          });
+        }
+        break;
+      }
+      case "sequence.skipped": {
+        // A step came due but Agent 3 couldn't act on it (e.g. no email on
+        // file) — without this, GET /sequences/due keeps returning the same
+        // enrollment every poll forever, since nothing else ever advances
+        // nextStepDueAt or sets a terminal state for it.
+        const reason = (data.output?.reason as string | undefined) ?? "Sequence step skipped";
+        await prisma.activity.create({
+          data: { leadId: lead.id, type: "note", actor: "agent", agentName: "writer", payload: { note: reason } },
+        });
+        if (data.enrollmentId) {
+          await prisma.sequenceEnrollment.update({
+            where: { id: data.enrollmentId },
+            data: { stoppedReason: reason },
           });
         }
         break;
