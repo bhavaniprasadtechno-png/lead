@@ -46,7 +46,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `CAL_COM_EVENT_TYPE_ID` | The numeric event type ID from your Cal.com event type's dashboard URL, e.g. `app.cal.com/event-types/12345678` → `12345678`. Cal.com's v2 slots API takes this, not a username/slug — see "Real available slots in the booking email" below. If unset, same graceful fallback as above | Agent 5 |
 | `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
 | `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as the `X-API-KEY` header to `google.serper.dev/search` as a second search engine run in parallel with Tavily on every query, to roughly double the raw material the candidate-extraction LLM sees per query | Agent 8 |
-| `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month) | Agent 8 |
+| `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month). Agent 1 uses the same Variable to backfill a missing email on any lead that already has a company on file (see "CSV bulk import + email backfill" below) | Agents 1, 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
 | `POSTMARK_SERVER_TOKEN` | Your [Postmark](https://postmarkapp.com) Server API Token (Servers → your server → API Tokens) — sent as the `X-Postmark-Server-Token` header on `api.postmarkapp.com/email`. **Not a credential** — same pattern as `TAVILY_API_KEY`/`APOLLO_API_KEY`/etc above, a plain Variable | Agents 3, 5 |
 | `POSTMARK_FROM_EMAIL` | The email address every outbound email is sent **from** — must be a [verified Sender Signature](https://postmarkapp.com/support/article/1046-how-do-i-add-a-verified-sender-signature) on your Postmark account, or Postmark rejects the send outright | Agents 3, 5 |
@@ -222,7 +222,7 @@ Active for the app's automatic calls to reach it.
 | `GET /api/agents/by-type/:type?orgId=` | every workflow, first step — fetches the current system prompt/model so prompt edits in the app UI take effect with no redeploy |
 | `GET /api/leads/:id` | Agents 2-5 — pull lead + enrichment context |
 | `PATCH /api/leads/:id/enrichment` | Agent 1 |
-| `PATCH /api/leads/:id` | Agent 2 (score/status) |
+| `PATCH /api/leads/:id` | Agent 1 (email backfill via Hunter, best-effort), Agent 2 (score/status) |
 | `POST /api/leads/:id/activities` | all agents — timeline logging |
 | `POST /api/agents/:id/runs` | all agents — input/output/latency/cost logging |
 | `POST /api/webhooks/inbound` | Agents 3-5 — reply classification, meetings booked, bounces, sequence progression |
@@ -1022,3 +1022,41 @@ Active for the app's automatic calls to reach it.
   n8n (harmless — it simply receives no more traffic) rather than deleted,
   in case a future direct-send use case wants to reuse that entry point
   with a real templateId supplied.
+- **CSV bulk import + email backfill.** The app's Leads page has a "Bulk
+  upload" flow (`POST /api/leads/bulk-upload`): download a CSV template,
+  fill in rows (only `firstName` is required), upload it, and each row is
+  created through the exact same `createLead()` path as a manually-added
+  lead or an ICP-discovered one — so it fires the same `lead.created`
+  webhook and gets the same Apollo enrichment (Agent 1) → scoring (Agent
+  2) pipeline automatically, no separate workflow needed for that part.
+  Rows missing a `firstName`, or whose email is already invalid, are
+  reported back per-row; rows whose email already exists on another lead
+  in the org (or is repeated within the file) are skipped as duplicates
+  rather than creating a second lead.
+
+  What CSV import *doesn't* get for free is a missing email — Apollo's
+  `organizations/enrich` call is company-level only and never returns a
+  person's email. Agent 1 now has a second branch after `GET Lead`,
+  parallel to the Apollo lookup: `IF: Needs Email Lookup` fires only when
+  the lead has no email **and** has a company name on file, calls
+  `Hunter: Email Finder` (same `api.hunter.io/v2/email-finder` call
+  Agent 8 already uses, by company + first/last name), and
+  `Apply Hunter Result` only accepts the email if Hunter's own confidence
+  `score >= 50` — same bar Agent 8 holds itself to, never lower. A found
+  email is PATCHed onto `Lead.email` via `PATCH /api/leads/:id`, which
+  now accepts an optional `email` field. This branch runs independently
+  of the main enrichment/scoring chain and uses `neverError` throughout,
+  so a missing `HUNTER_API_KEY` or a Hunter miss never affects enrichment
+  or scoring for that lead — it just keeps "No email on file".
+
+  **Serper was deliberately left out of this pipeline.** In this codebase
+  Serper only has an established role in Agent 8, as a second general-web
+  search engine run in parallel with Tavily to widen the raw material an
+  LLM extracts *candidate* leads from — it has no single-person "look up
+  this exact lead's email/phone" endpoint the way Hunter does. Wiring it
+  into Agent 1 would mean re-purposing a web-search API as a weak,
+  unverified stand-in for what Hunter already does with an actual
+  confidence score, for no real gain — so CSV-imported leads are enriched
+  via Apollo (company) + Hunter (email), matching the tools each is
+  actually built for, and Serper stays scoped to Agent 8's discovery use
+  case.
