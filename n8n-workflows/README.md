@@ -48,6 +48,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as the `X-API-KEY` header to `google.serper.dev/search` as a second search engine run in parallel with Tavily on every query, to roughly double the raw material the candidate-extraction LLM sees per query | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month). Agent 1 uses the same Variable to backfill a missing email on any lead that already has a company on file (see "CSV bulk import + email backfill" below) | Agents 1, 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
+| `PDL_API_KEY` | Your [People Data Labs](https://www.peopledatalabs.com) API key — sent as the `X-Api-Key` header to `api.peopledatalabs.com/v5/person/search` as a last-resort fallback in Agent 1's person-discovery branch, only called when Tavily+Serper+LLM found nobody. PDL's free tier is the smallest of any source here, so this is deliberately the path of last resort, not tried on every company-only lead | Agent 1 |
 | `POSTMARK_SERVER_TOKEN` | Your [Postmark](https://postmarkapp.com) Server API Token (Servers → your server → API Tokens) — sent as the `X-Postmark-Server-Token` header on `api.postmarkapp.com/email`. **Not a credential** — same pattern as `TAVILY_API_KEY`/`APOLLO_API_KEY`/etc above, a plain Variable | Agents 3, 5 |
 | `POSTMARK_FROM_EMAIL` | The email address every outbound email is sent **from** — must be a [verified Sender Signature](https://postmarkapp.com/support/article/1046-how-do-i-add-a-verified-sender-signature) on your Postmark account, or Postmark rejects the send outright | Agents 3, 5 |
 
@@ -1210,3 +1211,70 @@ Active for the app's automatic calls to reach it.
   branch directly) before publishing — both the found and not-found
   paths, including Hunter's free-tier quota being exhausted mid-test,
   which the existing graceful-degradation logic absorbed cleanly.
+- **On-demand "Enrich missing info" + Hunter's discarded phone/LinkedIn
+  fields captured + Serper added to person discovery.** Three related
+  additions:
+  - The app's Leads page gained an "Enrich missing info" button
+    (`POST /api/leads/enrich-missing`) for leads already sitting in the
+    pipeline with gaps, not just new imports — it re-fires the same
+    `lead.created` webhook Agent 1 already handles, so it's just a
+    manual re-trigger of the exact same enrichment branches against
+    current data, capped at 25 leads per click.
+  - Hunter's email-finder response already includes `phone_number` and
+    `linkedin_url` when known, but `Apply Hunter Result` (both the
+    by-name email-lookup branch and the person-discovery branch) only
+    ever extracted `email`, discarding the rest. Both now capture all
+    three; `IF: Hunter Found Email` was broadened so a phone/LinkedIn
+    -only hit (no email) still triggers a PATCH; the person-discovery
+    branch prefers its own already-found LinkedIn URL over Hunter's
+    when both are present, rather than overwriting a good match.
+  - The person-discovery branch gained Serper as a second search engine
+    alongside Tavily (mirroring Agent 8's existing pattern) via a new
+    `Serper: Person Search` → `Normalize Serper Results (Person)` →
+    `Combine Person Search Results` (sync barrier) chain, with the
+    combined, deduped-by-URL result pool fed to the extraction LLM.
+  - **n8n Cloud's execution limit was reached mid-development**,
+    blocking any further live test/execute calls (both manual test
+    runs and, per the account's own quota semantics, presumably real
+    production webhook-triggered runs too). Rather than publish
+    untested or leave the improvements stuck, the exact same `jsCode`
+    from every new/changed node was validated deterministically against
+    a **local n8n instance** (`npm install -g n8n`, run with
+    `N8N_USER_MANAGEMENT` bootstrapped via its own REST API, driven
+    with fabricated-but-realistic Tavily/Serper/Hunter response
+    fixtures — no real API keys or cloud quota involved). This caught
+    zero bugs: Serper reshaping, URL-based dedup (including a
+    deliberately duplicated URL across both engines), the broadened
+    Hunter-found condition, the "prefer already-found LinkedIn URL"
+    rule, and the patch-body construction (no field is ever sent as
+    `null`) all behaved exactly as designed on the first run. Published
+    to production on the strength of that local validation once the
+    cloud account's execution limit made a final live confirmation
+    pass impossible in the moment.
+- **People Data Labs (PDL) added as a last-resort fallback in the
+  person-discovery branch.** Only reached when Tavily+Serper+LLM found
+  nobody (`IF: Person Found`'s false branch) — deliberately last in
+  line, matching the guidance that inspired this addition: PDL's free
+  tier is the smallest of any source in this pipeline, so it's spent
+  only on leads nothing else could resolve, never on every lead.
+  `Build PDL Query` turns the company (via website domain, falling back
+  to company name when no website is on file) and the `/`-separated
+  acceptable titles into a PDL SQL query — `job_title LIKE '%...%'`
+  per title rather than PDL's controlled `job_title_role` taxonomy
+  (`marketing`, `engineering`, etc.), since arbitrary titles like "CTO"
+  don't reliably map onto that taxonomy. `PDL: Person Search` calls
+  `POST /v5/person/search` (requires the `PDL_API_KEY` n8n Variable,
+  `neverError` since a missing key or exhausted quota should just mean
+  no PDL candidate, not a failed run). `Parse PDL Result` extracts
+  name/title/email/phone and normalizes `linkedin_url` (PDL sometimes
+  returns it without a scheme) into a proper `https://` URL before it's
+  ever PATCHed onto a lead. A hit is PATCHed the same way as an
+  LLM-found candidate; a miss (including a quota-exceeded error
+  response, which has no `data` array at all) falls through to the
+  existing "could not find a contact" activity note, unchanged.
+  Live-tested (deterministically, against a local n8n instance, same
+  methodology as above) against a hit, a miss, and a PDL error response
+  shape — all three parsed correctly, including verifying the SQL
+  -escaping logic doesn't break on a company name containing an
+  apostrophe (`O'Brien Robotics` → `job_company_name='o''brien
+  robotics'`, standard SQL-safe doubling, not string concatenation).

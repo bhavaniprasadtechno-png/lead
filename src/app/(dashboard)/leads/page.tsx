@@ -30,6 +30,8 @@ export default function LeadsPage() {
   const [status, setStatus] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichMessage, setEnrichMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +56,30 @@ export default function LeadsPage() {
     await fetch(`/api/leads/${id}`, { method: "DELETE" });
   }
 
+  async function enrichMissing() {
+    setEnriching(true);
+    setEnrichMessage(null);
+    try {
+      const res = await fetch("/api/leads/enrich-missing", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to queue enrichment");
+      if (data.queued === 0 && data.skippedNoCompany === 0) {
+        setEnrichMessage("Nothing to enrich — every lead already has a name and email on file.");
+      } else {
+        setEnrichMessage(
+          `Queued ${data.queued} lead${data.queued === 1 ? "" : "s"} for AI enrichment — check back in a minute or two.` +
+            (data.skippedNoCompany > 0
+              ? ` ${data.skippedNoCompany} more lead${data.skippedNoCompany === 1 ? "" : "s"} skipped (no company on file to search by).`
+              : "")
+        );
+      }
+    } catch (err) {
+      setEnrichMessage(err instanceof Error ? err.message : "Failed to queue enrichment");
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -61,6 +87,9 @@ export default function LeadsPage() {
         subtitle="Every lead captured across your channels, enriched and scored by AI"
         actions={
           <>
+            <button className="btn-secondary" onClick={enrichMissing} disabled={enriching} title="Search Hunter/Tavily/Apollo for any lead missing a name or email">
+              {enriching ? "Enriching…" : "Enrich missing info"}
+            </button>
             <button className="btn-secondary" onClick={() => setShowBulkModal(true)}>
               Bulk upload
             </button>
@@ -71,6 +100,14 @@ export default function LeadsPage() {
         }
       />
       <div className="p-8">
+        {enrichMessage && (
+          <div className="card p-3 mb-4 text-sm bg-slate-50 border-slate-200 text-slate-700 flex items-center justify-between">
+            <span>{enrichMessage}</span>
+            <button className="text-slate-400 hover:text-slate-600" onClick={() => setEnrichMessage(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
         {icpId && (
           <div className="card p-3 mb-4 text-sm bg-brand-50 border-brand-200 text-brand-700 flex items-center justify-between">
             <span>Filtered to leads discovered by one ICP</span>
