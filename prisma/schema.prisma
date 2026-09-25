@@ -99,7 +99,7 @@ model Lead {
   id             String     @id @default(uuid())
   orgId          String     @map("org_id")
   source         LeadSource @default(manual)
-  firstName      String     @map("first_name")
+  firstName      String?    @map("first_name")
   lastName       String?    @map("last_name")
   email          String?
   phone          String?

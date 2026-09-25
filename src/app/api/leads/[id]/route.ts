@@ -29,6 +29,7 @@ const patchSchema = z.object({
   phone: z.string().nullable().optional(),
   company: z.string().nullable().optional(),
   jobTitle: z.string().nullable().optional(),
+  linkedinUrl: z.string().url().nullable().optional(),
 });
 
 async function loadLead(orgId: string | undefined, id: string) {
@@ -126,6 +127,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(data.phone !== undefined ? { phone: data.phone } : {}),
         ...(data.company !== undefined ? { company: data.company } : {}),
         ...(data.jobTitle !== undefined ? { jobTitle: data.jobTitle } : {}),
+        ...(data.linkedinUrl !== undefined ? { linkedinUrl: data.linkedinUrl } : {}),
       },
     });
 

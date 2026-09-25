@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { PageHeader, ScoreBadge } from "@/components/ui";
 import { PIPELINE_STAGES } from "@/lib/constants";
+import { leadDisplayName } from "@/lib/format";
 
 interface Lead {
   id: string;
-  firstName: string;
+  firstName: string | null;
   lastName: string | null;
   company: string | null;
   status: string;
@@ -70,7 +71,7 @@ export default function PipelinePage() {
                     <div key={lead.id} className="card p-3">
                       <div className="flex items-center justify-between">
                         <Link href={`/leads/${lead.id}`} className="font-medium text-sm hover:text-brand-600">
-                          {lead.firstName} {lead.lastName}
+                          {leadDisplayName(lead)}
                         </Link>
                         <button
                           className="text-xs text-slate-300 hover:text-red-600"

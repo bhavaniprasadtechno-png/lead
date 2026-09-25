@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { PageHeader, EmptyState, StatusBadge } from "@/components/ui";
+import { leadDisplayName } from "@/lib/format";
 
 interface Meeting {
   id: string;
@@ -12,7 +13,7 @@ interface Meeting {
   body: string | null;
   lead: {
     id: string;
-    firstName: string;
+    firstName: string | null;
     lastName: string | null;
     email: string | null;
     company: string | null;
@@ -55,7 +56,7 @@ export default function MeetingsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <Link href={`/leads/${m.lead.id}`} className="font-semibold hover:text-brand-600">
-                      {m.lead.firstName} {m.lead.lastName ?? ""}
+                      {leadDisplayName(m.lead)}
                     </Link>
                     <p className="text-sm text-slate-500 mt-0.5">
                       {[m.lead.jobTitle, m.lead.company].filter(Boolean).join(" at ") || m.lead.email || "No contact details"}
