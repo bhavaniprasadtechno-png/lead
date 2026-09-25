@@ -1210,3 +1210,43 @@ Active for the app's automatic calls to reach it.
   branch directly) before publishing — both the found and not-found
   paths, including Hunter's free-tier quota being exhausted mid-test,
   which the existing graceful-degradation logic absorbed cleanly.
+- **On-demand "Enrich missing info" + Hunter's discarded phone/LinkedIn
+  fields captured + Serper added to person discovery.** Three related
+  additions:
+  - The app's Leads page gained an "Enrich missing info" button
+    (`POST /api/leads/enrich-missing`) for leads already sitting in the
+    pipeline with gaps, not just new imports — it re-fires the same
+    `lead.created` webhook Agent 1 already handles, so it's just a
+    manual re-trigger of the exact same enrichment branches against
+    current data, capped at 25 leads per click.
+  - Hunter's email-finder response already includes `phone_number` and
+    `linkedin_url` when known, but `Apply Hunter Result` (both the
+    by-name email-lookup branch and the person-discovery branch) only
+    ever extracted `email`, discarding the rest. Both now capture all
+    three; `IF: Hunter Found Email` was broadened so a phone/LinkedIn
+    -only hit (no email) still triggers a PATCH; the person-discovery
+    branch prefers its own already-found LinkedIn URL over Hunter's
+    when both are present, rather than overwriting a good match.
+  - The person-discovery branch gained Serper as a second search engine
+    alongside Tavily (mirroring Agent 8's existing pattern) via a new
+    `Serper: Person Search` → `Normalize Serper Results (Person)` →
+    `Combine Person Search Results` (sync barrier) chain, with the
+    combined, deduped-by-URL result pool fed to the extraction LLM.
+  - **n8n Cloud's execution limit was reached mid-development**,
+    blocking any further live test/execute calls (both manual test
+    runs and, per the account's own quota semantics, presumably real
+    production webhook-triggered runs too). Rather than publish
+    untested or leave the improvements stuck, the exact same `jsCode`
+    from every new/changed node was validated deterministically against
+    a **local n8n instance** (`npm install -g n8n`, run with
+    `N8N_USER_MANAGEMENT` bootstrapped via its own REST API, driven
+    with fabricated-but-realistic Tavily/Serper/Hunter response
+    fixtures — no real API keys or cloud quota involved). This caught
+    zero bugs: Serper reshaping, URL-based dedup (including a
+    deliberately duplicated URL across both engines), the broadened
+    Hunter-found condition, the "prefer already-found LinkedIn URL"
+    rule, and the patch-body construction (no field is ever sent as
+    `null`) all behaved exactly as designed on the first run. Published
+    to production on the strength of that local validation once the
+    cloud account's execution limit made a final live confirmation
+    pass impossible in the moment.
