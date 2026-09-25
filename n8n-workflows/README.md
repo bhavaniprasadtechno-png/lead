@@ -1136,3 +1136,37 @@ Active for the app's automatic calls to reach it.
   isn't `neverError`, would have failed the whole Agent 3 sub-execution
   and reintroduced a batch-blocking failure in Agent 6, the same class
   of bug just fixed above.
+- **Agent 6 was only ever emailing the first due enrollment out of the
+  whole batch, every single cron cycle, silently dropping the rest.**
+  Confirmed live: 14 enrollments were due at once, several with real
+  emails on file, but only the first one (an email-less lead) ever got
+  an LLM decision — the other 13, including qualified leads with valid
+  emails that had been due for over a day, were never evaluated. Root
+  cause was two Code nodes downstream of `Split Out Enrollments`
+  (`Sign: Get Prompt`, `Parse Decision JSON`) with no `mode` parameter
+  set, defaulting to n8n's "Run Once for All Items" — which collapses
+  any number of input items down to a single output based on the first
+  item only. Fixed by setting `mode: "runOnceForEachItem"` on both (and
+  updating their code to match that mode's contract: return a single
+  `{ json: {...} }` object instead of an array, and use `$input.item`
+  instead of the disallowed `$input.first()`). Live-tested against the
+  real 14-item backlog with `Call Agent 3 (Writer)` temporarily bypassed
+  to a NoOp sink — confirmed all 14 got independent, correctly-paired
+  decisions before publishing.
+  A second instance of the exact same bug class turned up one step
+  later: `Call Agent 3 (Writer)` (an Execute Workflow node) also had no
+  `mode` set, defaulting to batching every `should_send: true` item from
+  the cycle into **one** sub-workflow call instead of one call per lead
+  — confirmed live when a run with 5 qualified leads produced exactly 1
+  Agent 3 execution. Fixed by setting `mode: "each"`. That in turn
+  surfaced a fault-isolation gap: with `mode: "each"`, one lead hitting
+  a transient error (observed live: Gemini's free-tier rate limit, 15
+  req/min) aborted the entire cron cycle, leaving every other qualified
+  lead in that batch unprocessed too. Fixed by setting
+  `onError: "continueRegularOutput"` on the node, so a failing lead is
+  skipped (it keeps its `nextStepDueAt` and simply retries next cycle,
+  same fallback semantics as the transient-LLM-failure case above)
+  instead of blocking the rest of the batch. All three fixes were
+  verified against real production data end-to-end: a live trigger after
+  publishing sent real, personalized Gmail emails to multiple previously
+  -stuck qualified leads in a single run.
