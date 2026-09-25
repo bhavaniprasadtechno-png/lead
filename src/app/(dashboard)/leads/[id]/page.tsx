@@ -5,6 +5,7 @@ import { PageHeader, StatusBadge, ScoreBadge } from "@/components/ui";
 import { LeadStatusControl } from "@/components/LeadStatusControl";
 import { LeadEnrollControl } from "@/components/LeadEnrollControl";
 import { DeleteLeadButton } from "@/components/DeleteLeadButton";
+import { leadDisplayName } from "@/lib/format";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,7 +29,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <div>
       <PageHeader
-        title={`${lead.firstName} ${lead.lastName ?? ""}`.trim()}
+        title={leadDisplayName(lead)}
         subtitle={`${lead.jobTitle ?? "Unknown title"} at ${lead.company ?? "Unknown company"}`}
         actions={
           <div className="flex items-center gap-2">

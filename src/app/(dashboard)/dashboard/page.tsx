@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { PageHeader, StatusBadge, StatTile } from "@/components/ui";
 import { PIPELINE_STAGES } from "@/lib/constants";
 import { Stagger, StaggerItem, AnimatedNumber } from "@/components/motion";
+import { leadDisplayName } from "@/lib/format";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -105,9 +106,7 @@ export default async function DashboardPage() {
                   className="row-hover flex items-center justify-between py-3 text-sm -mx-2 px-2 rounded"
                 >
                   <div>
-                    <div className="font-medium">
-                      {lead.firstName} {lead.lastName}
-                    </div>
+                    <div className="font-medium">{leadDisplayName(lead)}</div>
                     <div className="text-slate-500">{lead.company ?? lead.email}</div>
                   </div>
                   <StatusBadge status={lead.status} />

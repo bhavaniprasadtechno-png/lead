@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { PageHeader, EmptyState } from "@/components/ui";
+import { leadDisplayName } from "@/lib/format";
 
 interface Approval {
   id: string;
@@ -10,7 +11,7 @@ interface Approval {
   output: any;
   createdAt: string;
   agent: { id: string; name: string; type: string };
-  lead: { id: string; firstName: string; lastName: string | null; email: string | null } | null;
+  lead: { id: string; firstName: string | null; lastName: string | null; email: string | null } | null;
 }
 
 export default function ApprovalsPage() {
@@ -95,7 +96,7 @@ export default function ApprovalsPage() {
                 </div>
                 {a.lead && (
                   <Link href={`/leads/${a.lead.id}`} className="text-sm font-medium hover:text-brand-600">
-                    {a.lead.firstName} {a.lead.lastName} · {a.lead.email}
+                    {leadDisplayName(a.lead)} · {a.lead.email}
                   </Link>
                 )}
                 <div className="grid grid-cols-2 gap-4 mt-3">

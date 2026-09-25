@@ -6,10 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader, StatusBadge, ScoreBadge, EmptyState, Modal } from "@/components/ui";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { buildCsv } from "@/lib/csv";
+import { leadDisplayName } from "@/lib/format";
 
 interface Lead {
   id: string;
-  firstName: string;
+  firstName: string | null;
   lastName: string | null;
   email: string | null;
   company: string | null;
@@ -113,9 +114,11 @@ export default function LeadsPage() {
                 <tr key={lead.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <Link href={`/leads/${lead.id}`} className="font-medium text-slate-900 hover:text-brand-600">
-                      {lead.firstName} {lead.lastName}
+                      {leadDisplayName(lead)}
                     </Link>
-                    <div className="text-slate-400 text-xs">{lead.email ?? "No email on file"}</div>
+                    <div className="text-slate-400 text-xs">
+                      {lead.email ?? (lead.firstName ? "No email on file" : "Discovering contact…")}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {lead.company ?? "—"}
@@ -165,6 +168,7 @@ const CSV_TEMPLATE_HEADERS = [
 function downloadCsvTemplate() {
   const csv = buildCsv(CSV_TEMPLATE_HEADERS, [
     ["Jordan", "Lee", "jordan@example.com", "", "Example Corp", "VP Sales", "", "example.com"],
+    ["", "", "", "", "Acme Robotics", "CTO/VP Engineering", "", "acmerobotics.com"],
   ]);
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -214,9 +218,12 @@ function BulkUploadModal({ onClose, onCreated }: { onClose: () => void; onCreate
       <div className="space-y-4">
         <div className="text-sm text-slate-600">
           <p>
-            Upload a CSV of leads. Only <span className="font-medium">firstName</span> is required — leave the
-            rest blank and each lead is automatically enriched (company data via Apollo) and scored by the AI
-            agents once imported, same as a manually added lead.
+            Upload a CSV of leads. No field is required on its own — a row just needs <span className="font-medium">at
+            least one</span> of a name, email, or company/website to import. A row with only{" "}
+            <span className="font-medium">company + website + job title(s)</span> is fine: put multiple acceptable
+            titles in one cell separated by <span className="font-medium">/</span> (e.g. <code>CTO/VP Engineering</code>)
+            and the AI agents will search for and fill in the missing name, email, phone, role, and LinkedIn profile
+            (LinkedIn is best-effort — a lead still imports without one) after import, same as any other lead.
           </p>
           <button type="button" className="text-brand-600 font-medium hover:underline mt-2" onClick={downloadCsvTemplate}>
             Download CSV template →
@@ -229,7 +236,7 @@ function BulkUploadModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div className="text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 space-y-1">
             <p>
               <span className="font-medium text-emerald-700">{result.created} created</span>
-              {result.skipped > 0 && <span className="text-slate-500"> · {result.skipped} skipped (duplicate email)</span>}
+              {result.skipped > 0 && <span className="text-slate-500"> · {result.skipped} skipped (already imported)</span>}
               {result.errors.length > 0 && <span className="text-red-600"> · {result.errors.length} failed</span>}
               <span className="text-slate-400"> · {result.totalRows} rows total</span>
             </p>

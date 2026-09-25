@@ -44,7 +44,7 @@ Set these in n8n: left sidebar → **Overview → Variables** (or **Settings
 | `CAL_COM_BOOKING_LINK` | Your Cal.com booking URL, e.g. `https://cal.com/your-team/intro` (falls back to a placeholder if unset) | Agent 5 |
 | `CAL_COM_API_KEY` | Your Cal.com API key (Settings → Developer → API keys, `cal_live_...`) — sent as `Authorization: Bearer {{$vars.CAL_COM_API_KEY}}` against Cal.com's v2 API. If unset, `GET Available Slots` fails gracefully (see below) and the booking email just falls back to the plain link | Agent 5 |
 | `CAL_COM_EVENT_TYPE_ID` | The numeric event type ID from your Cal.com event type's dashboard URL, e.g. `app.cal.com/event-types/12345678` → `12345678`. Cal.com's v2 slots API takes this, not a username/slug — see "Real available slots in the booking email" below. If unset, same graceful fallback as above | Agent 5 |
-| `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agent 8 |
+| `TAVILY_API_KEY` | Your [Tavily](https://tavily.com) API key (free tier: 1,000 searches/month, no card) — sent in the JSON body to `api.tavily.com/search` so Agent 8 (and Agent 1's company-only-lead person-discovery branch) can ground candidates in real search results instead of the LLM's training data. Tavily takes plain natural-language queries, unlike Google-operator-based search APIs | Agents 1, 8 |
 | `SERPER_API_KEY` | Your [Serper](https://serper.dev) API key — sent as the `X-API-KEY` header to `google.serper.dev/search` as a second search engine run in parallel with Tavily on every query, to roughly double the raw material the candidate-extraction LLM sees per query | Agent 8 |
 | `HUNTER_API_KEY` | Your [Hunter.io](https://hunter.io) API key — sent as the `api_key` query param to `api.hunter.io/v2/email-finder` so Agent 8 can find a real email for a candidate by company + name (free tier: 25 searches/month). Agent 1 uses the same Variable to backfill a missing email on any lead that already has a company on file (see "CSV bulk import + email backfill" below) | Agents 1, 8 |
 | `APOLLO_API_KEY` | Your [Apollo.io](https://apollo.io) API key — sent as the `api_key` body param to `api.apollo.io/v1/people/match` so Agent 1 can enrich a lead's company/contact data. **Not a credential** — n8n has no built-in Apollo credential type, so it will never show up in the credential-type picker; set it as a plain Variable, exactly like `TAVILY_API_KEY`/`HUNTER_API_KEY` above | Agent 1 |
@@ -1170,3 +1170,43 @@ Active for the app's automatic calls to reach it.
   verified against real production data end-to-end: a live trigger after
   publishing sent real, personalized Gmail emails to multiple previously
   -stuck qualified leads in a single run.
+- **CSV bulk upload now accepts company-only rows (company + website +
+  job title(s), no name/email/phone required) and Agent 1 discovers the
+  missing contact.** Previously `firstName` was required on every row
+  (both in the app's validation and as a NOT NULL column on `Lead`);
+  now a row just needs *something* to import by (a name, an email, or a
+  company/website) — `firstName` is nullable end to end, and every list
+  /detail view that renders a lead's name falls back to the company name
+  (or "Unknown contact") via a shared `leadDisplayName()` helper while
+  discovery is pending. The job title cell accepts multiple acceptable
+  titles separated by `/` (e.g. `CTO/VP Engineering`) since a company
+  -only row has no way to know which one the real contact holds.
+  A new branch was added to Agent 1 (`IF: Needs Person Discovery`, off
+  `GET Lead`'s third output, parallel to the existing Apollo/Hunter
+  -by-name branches): it fires when a lead has a company but no
+  firstName, splits the job-title cell on `/`, and searches Tavily for
+  `("title1" OR "title2") "company" site:linkedin.com/in`. A dedicated
+  extraction LLM call (own hardcoded task-specific prompt, not the
+  enricher's DB-configurable normalization prompt — that's a different
+  job) picks the single best-matching real candidate from the search
+  results only, explicitly forbidden from inventing a name, title, or
+  LinkedIn URL not present in the results — verified live that it
+  correctly returns `found: false` on a fictional company with no real
+  match rather than hallucinating one, and correctly identified a real
+  person (with the right title and verbatim LinkedIn URL) when the
+  company was real. A match is then run through the same by-name Hunter
+  email-finder + score>=50 gate used elsewhere in this pipeline, and the
+  discovered name/title/LinkedIn (+ email, if found) is PATCHed onto the
+  lead via `PATCH /api/leads/:id` (extended to accept `linkedinUrl`). No
+  match logs a visible "could not find a contact" activity note instead
+  of leaving the lead silently nameless with no explanation. Every new
+  HTTP node in this branch is `neverError` so a Tavily/LLM/Hunter hiccup
+  degrades to "no contact found" rather than failing the rest of Agent
+  1's enrichment/scoring run. Bulk-upload dedup was extended to key
+  company-only rows by normalized company/website (previously email
+  -only), so re-uploading the same prospect list doesn't create fresh
+  duplicates every time. Live-tested via the rename/bypass/revert
+  scaffold pattern (synthetic company-only lead data feeding the new
+  branch directly) before publishing — both the found and not-found
+  paths, including Hunter's free-tier quota being exhausted mid-test,
+  which the existing graceful-degradation logic absorbed cleanly.

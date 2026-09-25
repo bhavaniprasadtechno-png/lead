@@ -10,7 +10,7 @@ import type { LeadSource } from "@prisma/client";
  */
 export async function createLead(params: {
   orgId: string;
-  firstName: string;
+  firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -25,7 +25,7 @@ export async function createLead(params: {
   const lead = await prisma.lead.create({
     data: {
       orgId: params.orgId,
-      firstName: params.firstName,
+      firstName: params.firstName ?? undefined,
       lastName: params.lastName ?? undefined,
       email: params.email ?? undefined,
       phone: params.phone ?? undefined,

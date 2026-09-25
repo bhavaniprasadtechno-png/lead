@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader, EmptyState, StatusBadge, ScoreBadge, Modal, Tabs, StatTile } from "@/components/ui";
+import { leadDisplayName } from "@/lib/format";
 
 interface Template {
   id: string;
@@ -18,7 +19,7 @@ interface Step {
 
 interface EnrolledLead {
   id: string;
-  firstName: string;
+  firstName: string | null;
   lastName: string | null;
   email: string | null;
   status: string;
@@ -80,7 +81,7 @@ interface ActivityItem {
   agentName: string | null;
   createdAt: string;
   payload: Record<string, unknown> | null;
-  lead: { id: string; firstName: string; lastName: string | null };
+  lead: { id: string; firstName: string | null; lastName: string | null };
 }
 
 const STATUS_OPTIONS = ["draft", "active", "paused", "archived"];
@@ -449,7 +450,7 @@ function LeadsTab({
                 <tr key={e.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 pr-4">
                     <Link href={`/leads/${e.lead.id}`} className="font-medium hover:text-brand-600">
-                      {e.lead.firstName} {e.lead.lastName ?? ""}
+                      {leadDisplayName(e.lead)}
                     </Link>
                     <div className="text-xs text-slate-400">{e.lead.email ?? "No email on file"}</div>
                   </td>
@@ -491,7 +492,7 @@ function EmailsTab({ items }: { items: ActivityItem[] }) {
                 {a.type === "email_sent" ? "Sent" : "Received"}
               </span>
               <Link href={`/leads/${a.lead.id}`} className="font-medium hover:text-brand-600">
-                {a.lead.firstName} {a.lead.lastName ?? ""}
+                {leadDisplayName(a.lead)}
               </Link>
             </div>
             <span className="text-xs text-slate-400">{new Date(a.createdAt).toLocaleString()}</span>
@@ -561,7 +562,7 @@ function ActivityList({ items, showLead = true }: { items: ActivityItem[]; showL
                 <>
                   {" · "}
                   <Link href={`/leads/${a.lead.id}`} className="text-brand-600 hover:underline">
-                    {a.lead.firstName} {a.lead.lastName ?? ""}
+                    {leadDisplayName(a.lead)}
                   </Link>
                 </>
               )}
